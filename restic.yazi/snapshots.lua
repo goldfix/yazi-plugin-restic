@@ -1,7 +1,9 @@
 --- Naming and ordering of restic snapshots as directories of the ghost filesystem.
 ---
 --- A snapshot directory is called `<timestamp>__<short_id>__<hostname>__[<tags>]`,
---- e.g. `2026-10-19_20-21-21__e3e4a9ff__myhost__[daily,home]`.
+--- e.g. `2026-10-19_20-21-21__e3e4a9ff__myhost__[daily,home]`. The timestamp is in the LOCAL time of the
+--- machine running Yazi (like `restic snapshots` prints it), so the alphabetical order of the folders is the
+--- chronological one even when the snapshots were made in different time zones.
 local util = require(".util")
 
 local M = {}
@@ -18,11 +20,20 @@ local M = {}
 ---@return string
 local function short_id(snapshot) return snapshot.short_id or snapshot.id:sub(1, 8) end
 
+--- Name-safe local date and time of an instant. A field so that tests can pin the time zone (UTC).
+---@param seconds number  Seconds since the Unix epoch.
+---@return string
+function M.format_time(seconds)
+  return os.date("%Y-%m-%d_%H-%M-%S", math.floor(seconds)) --[[@as string]]
+end
+
 --- Directory name of a snapshot.
 ---@param snapshot ResticSnapshot
 ---@return string
 function M.dirname(snapshot)
-  local stamp = snapshot.time:sub(1, 19):gsub("T", "_"):gsub(":", "-")
+  local seconds = M.epoch(snapshot.time)
+  -- an unparsable time (never produced by restic) keeps the text as is
+  local stamp = seconds and M.format_time(seconds) or snapshot.time:sub(1, 19):gsub("T", "_"):gsub(":", "-")
   local tags = {}
   for i, tag in ipairs(snapshot.tags or {}) do
     tags[i] = util.sanitize(tag)

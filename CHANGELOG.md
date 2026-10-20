@@ -25,3 +25,5 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 - `sample_backup.restic`: annotated template of the `.restic` file (local, sftp, REST, S3, B2, Azure, GCS, rclone),
   shipped with every build and checked by the test suite.
 - Reuse of the ghost tree when a repository is opened again; per-user private (mode 700) temp folder.
+- Snapshot folders are named with the date and time in the viewer's local time zone (like `restic snapshots`), and
+  `latest` is the newest snapshot by actual instant, also when hosts in different time zones share a repository.

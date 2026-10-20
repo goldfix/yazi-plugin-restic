@@ -1,10 +1,16 @@
 """End-to-end scenarios (acceptance table of AGENTS.md) against a real Yazi and a real restic repository."""
 
+import json
 import os
 import shutil
+import subprocess
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import pytest
+
+from .conftest import PASSWORD
 
 SFTP_SERVER = next((p for p in ("/usr/libexec/sftp-server", "/usr/lib/openssh/sftp-server", "/usr/lib/ssh/sftp-server") if Path(p).exists()), None)
 
@@ -42,6 +48,25 @@ def test_ghost_root_lists_snapshots_and_expands_lazily(repo_open):
     assert screen.splitlines()[0].startswith("/tmp/yazi-restic-")
     assert "latest" in screen
     repo_open.wait_for("data")  # preview of the hovered snapshot shows its first level (hover expansion)
+
+
+@pytest.fixture
+def kolkata(monkeypatch):
+    """Run Yazi in a time zone (+05:30) that is neither UTC nor the zone of the snapshot's host."""
+    monkeypatch.setenv("TZ", "Asia/Kolkata")
+
+
+def test_snapshot_folders_are_named_in_the_local_time_of_the_viewer(kolkata, workspace, repo_open):
+    out = subprocess.run(
+        ["restic", "-r", str(workspace / "repo"), "snapshots", "--json"],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=dict(os.environ, RESTIC_PASSWORD=PASSWORD),
+    ).stdout
+    taken = datetime.fromisoformat(json.loads(out)[0]["time"])
+    expected = taken.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%Y-%m-%d_%H-%M-%S")
+    assert expected + "__" in repo_open.text.replace("\n", "")
 
 
 def test_entering_a_folder_expands_it_and_drops_the_marker(in_data):

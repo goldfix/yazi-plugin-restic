@@ -20,13 +20,41 @@ describe("snapshots.dirname", function()
   it(
     "follows <timestamp>__<short_id>__<hostname>__[<tags>]",
     function()
-      assert.equals("2026-10-19_20-21-21__e3e4a9ff__my_host__[daily,home_dir]", snapshots.dirname(snap()))
+      assert.equals("2026-10-19_18-21-21__e3e4a9ff__my_host__[daily,home_dir]", snapshots.dirname(snap()))
     end
   )
 
   it("derives the short id from the id and copes with missing tags", function()
     local name = snapshots.dirname(snap { short_id = false, tags = false })
-    assert.equals("2026-10-19_20-21-21__e3e4a9ff__my_host__[]", name)
+    assert.equals("2026-10-19_18-21-21__e3e4a9ff__my_host__[]", name)
+  end)
+end)
+
+describe("snapshots.dirname time", function()
+  it("is the instant in the (pinned UTC) local time, whatever zone the snapshot was made in", function()
+    local tokyo = snapshots.dirname(snap { time = "2026-10-20T10:00:00.5+09:00" })
+    local rome = snapshots.dirname(snap { time = "2026-10-20T05:00:00+02:00" })
+    assert.matches("^2026%-10%-20_01%-00%-00__", tokyo)
+    assert.matches("^2026%-10%-20_03%-00%-00__", rome)
+    assert.is_true(tokyo < rome) -- the folder order is the chronological order
+  end)
+
+  it(
+    "keeps the text of a time it cannot parse",
+    function()
+      assert.matches(
+        "^2026%-10%-19_20%-21%-21__",
+        snapshots.dirname(snap { time = "2026-10-19T20:21:21 CEST" })
+      )
+    end
+  )
+
+  it("formats with the machine's local time by default", function()
+    local pinned = snapshots.format_time
+    local source = assert(loadfile("restic.yazi/snapshots.lua"))
+    local fresh = assert(source())
+    assert.equals(os.date("%Y-%m-%d_%H-%M-%S", 1792434081), fresh.format_time(1792434081.9))
+    assert.equals(pinned, snapshots.format_time) -- the shared module still has the pinned one
   end)
 end)
 
@@ -64,8 +92,9 @@ end)
 
 describe("snapshots.epoch", function()
   it("converts to UTC seconds whatever the zone and the fraction", function()
+    -- expected values from Python: datetime.fromisoformat(<iso>).timestamp()
     assert.equals(0, snapshots.epoch("1970-01-01T00:00:00Z"))
-    assert.equals(1792434081, snapshots.epoch("2026-10-19T20:21:21+02:00")) -- Python: datetime.fromisoformat(...).timestamp()
+    assert.equals(1792434081, snapshots.epoch("2026-10-19T20:21:21+02:00"))
     assert.equals(1792434081.932104, snapshots.epoch("2026-10-19T20:21:21.932104+02:00"))
     assert.equals(1792434081, snapshots.epoch("2026-10-19T14:21:21-04:00"))
     assert.equals(951782400, snapshots.epoch("2000-02-29T00:00:00+00:00")) -- leap day

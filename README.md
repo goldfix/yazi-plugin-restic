@@ -369,7 +369,7 @@ local and SFTP-over-local-`sftp-server` repositories are covered by the automate
 
 | Action | How |
 |---|---|
-| Open a repository | highlight a `.restic` file, `Enter`, type the password. Yazi jumps to the browsing tree: one folder per snapshot, named `<date>__<id>__<host>__[<tags>]`, newest last, plus `latest`. |
+| Open a repository | highlight a `.restic` file, `Enter`, type the password. Yazi jumps to the browsing tree: one folder per snapshot, named `<date>__<id>__<host>__[<tags>]` (date and time in **your** local time zone, as `restic snapshots` prints them), newest last, plus `latest`. |
 | Browse | the usual `h`/`j`/`k`/`l`. A folder is listed the first time you enter it *or rest the cursor on it* (so the preview column shows its content). |
 | See backup details | highlight any entry: type, size, permissions, owner, modified/accessed/changed dates, original path, local copy yes/no. |
 | Open a file | `Enter`. Files appear as empty placeholders; the real content is fetched from the backup, then opened with whatever program Yazi's `open` rules choose. Later `Enter`s on the same file open the local copy at once. |
@@ -388,6 +388,7 @@ local and SFTP-over-local-`sftp-server` repositories are covered by the automate
 | `Fatal: repository does not exist` | Wrong `repository` value (remember relative paths start at the `.restic` file). |
 | `The repository has no snapshots` | The repository opened but is empty. |
 | `Nothing to restore here` | The highlighted entries are not inside a snapshot. |
+| `N selected item(s) are not in the backup and will be skipped` | The selection (Yazi keeps it across folders) also holds files outside the snapshots; the rest is restored. |
 | `… is already being restored` | The same file is being fetched; wait for it. |
 | Nothing happens on `Enter` / `r e` | The keymap is missing, or the plugin is not in `plugins/restic.yazi`. Press `r` `v` to check. |
 

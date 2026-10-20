@@ -76,7 +76,9 @@ Other facts: `Command`/`fs.*` are async-context only; `Command` cannot redirect 
 
 Restic facts: `ls <snap> <dir> --json` (no `-R`) → JSONL: one `snapshot` record, then the dir itself, then its
 direct children (`name,type,path,size,mode,permissions,mtime,…`). Paths are as printed by `ls` (e.g. `/data/a.txt`).
-Fatal errors: stderr, as JSON `{"message_type":"exit_error","code","message"}` for `--json` commands, plain text
+`snapshots --json` times keep the creating host's zone
+(`…+09:00`, `…-04:00`): never compare them as text (`snapshots.epoch`); snapshot dir names use the viewer's LOCAL
+time (`snapshots.format_time`, pinned to UTC in `spec/helpers/setup.lua` so unit tests ignore the machine's zone). Fatal errors: stderr, as JSON `{"message_type":"exit_error","code","message"}` for `--json` commands, plain text
 otherwise (`Client:failure` handles both). Wrong password → exit 12 (0.17+; message match for older); missing
 repo → 10. `restore --include <p>` keeps the full path under `--target` and restores ancestor dirs with their
 backed-up permissions; restore exits 0 when the include matches nothing. Empty `RESTIC_PASSWORD` → error, no prompt.

@@ -82,9 +82,13 @@ class YaziDriver:
                 raise AssertionError(f"cwd does not end with {suffix!r} after {timeout}s:\n{self.text}")
 
     def close(self) -> None:
+        # A killed process can hang in `exit` (macOS) until the pty master has drained its pending output, and a
+        # blocking waitpid would then freeze the whole test run: keep reading while waiting for it to go away.
         try:
             os.kill(self.pid, signal.SIGKILL)
-            os.waitpid(self.pid, 0)
+            deadline = time.monotonic() + 5
+            while os.waitpid(self.pid, os.WNOHANG) == (0, 0) and time.monotonic() < deadline:
+                self._pump(0.05)
         except OSError:
             pass
         os.close(self.fd)

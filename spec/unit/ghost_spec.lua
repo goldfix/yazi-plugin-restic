@@ -178,14 +178,14 @@ describe("ghost tree", function()
     {
       id = "e3e4a9ff00",
       short_id = "e3e4a9ff",
-      time = "2026-10-19T20:21:21+02:00",
+      time = "2026-10-19T20:21:21+00:00",
       hostname = "host",
       tags = {},
     },
     {
       id = "11111111aa",
       short_id = "11111111",
-      time = "2026-10-18T10:00:00+02:00",
+      time = "2026-10-18T10:00:00+00:00",
       hostname = "host",
       tags = {},
     },
@@ -258,7 +258,7 @@ describe("ghost tree", function()
       local newer = {
         id = "22222222bb",
         short_id = "22222222",
-        time = "2026-10-20T10:00:00+02:00",
+        time = "2026-10-20T10:00:00+00:00",
         hostname = "host",
         tags = {},
       }

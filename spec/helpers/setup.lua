@@ -20,3 +20,8 @@ function _G.require(name)
 end
 
 require("spec.helpers.yazi_mock").install()
+
+-- Snapshot folder names carry the LOCAL time; the tests must not depend on the machine's time zone.
+require(".snapshots").format_time = function(seconds)
+  return os.date("!%Y-%m-%d_%H-%M-%S", math.floor(seconds))
+end
