@@ -6,6 +6,8 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-21
+
 ### Added
 - Browse restic snapshots from Yazi without FUSE: a "ghost" tree of real folders and 0-byte files in the OS temp
   dir, expanded lazily one level at a time; `latest` alias for the newest snapshot.
