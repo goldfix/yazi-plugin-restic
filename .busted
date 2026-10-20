@@ -1,0 +1,11 @@
+-- busted configuration. Run with `busted` from the project root (after `source lua_env.sh active`).
+return {
+  _all = {
+    lpath = "./?.lua;./spec/?.lua",
+    helper = "spec/helpers/setup.lua",
+  },
+  default = {
+    ROOT = { "spec", "tests/integration" },
+    pattern = "_spec",
+  },
+}

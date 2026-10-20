@@ -1,0 +1,100 @@
+# ==========================================================
+#  test-py template — .gitignore
+# ==========================================================
+
+# --- Secrets & ambiente locale (MAI committare) -----------
+.env
+.env.*
+py_var.sh
+key.json
+*.pem
+MEMORY.md
+
+# --- Python virtual environments --------------------------
+.venv/
+venv/
+env/
+py-env/
+conda-env/
+
+# --- Bytecode / cache Python ------------------------------
+__pycache__/
+*.py[codz]
+*$py.class
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.hypothesis/
+
+# --- Testing & coverage -----------------------------------
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# --- Jupyter / notebook artifacts -------------------------
+.ipynb_checkpoints/
+.marimo/
+
+# --- Log & artefatti runtime ------------------------------
+*.log
+tmp/
+
+# --- Local Lua toolchain (see lua_env.sh) -----------------
+.lua/
+luacov.*.out
+
+# --- Upstream yazi sources, reference only ----------------
+source_app/
+.pi-subagents/artifacts/
+
+# --- Editor / OS ------------------------------------------
+.DS_Store
+.idea/
+.vscode/
+uv.lock
+
+# Compiled Lua sources
+luac.out
+
+# luarocks build files
+*.src.rock
+*.zip
+*.tar.gz
+
+# Object files
+*.o
+*.os
+*.ko
+*.obj
+*.elf
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.def
+*.exp
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# --- Release builds (plugin-release skill) ---------------
+dist/

@@ -1,0 +1,5 @@
+{
+  "runtime": { "version": "Lua 5.4" },
+  "diagnostics": { "globals": ["ya", "ps", "ui", "fs", "cx", "rt", "th", "km", "Command", "Url", "Err"] },
+  "workspace": { "library": ["source_app/yazi/yazi-plugin/preset"], "ignoreDir": [".lua", "tmp", ".venv"] }
+}

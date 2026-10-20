@@ -1,0 +1,114 @@
+# ==============================================================================
+#  sample_backup.restic — annotated example of a restic.yazi configuration file
+# ==============================================================================
+#
+#  HOW TO USE
+#    1. Copy this file next to your backups (or anywhere you like) and give it any
+#       name ending in ".restic", e.g. "nas.restic".
+#    2. Keep ONE active "repository" line and adapt it. Uncomment an example below
+#       by deleting the leading "# ".
+#    3. In Yazi, hover the file and press <Enter>; type the repository password.
+#
+#  FORMAT
+#    - One "key = value" per line. Keys are case-insensitive.
+#    - A comment starts with "#" or ";" and must be on its OWN line. Never put a
+#      comment after a value: values are taken verbatim ("#" can be part of a path).
+#    - Quotes around a value are optional (useful only for leading/trailing spaces).
+#    - Unknown keys are ignored; if a key appears twice, the LAST one wins.
+#    - The password is NOT stored here: Yazi asks for it and keeps it in memory only.
+#
+#  KEYS
+#    repository      (required) where the restic repository is: anything that
+#                    `restic -r <value>` accepts.
+#    restic_exec     (optional) restic binary to use. Default: "restic" from $PATH.
+#                    restic 0.17.0 or newer is required.
+#    ssh_batch_mode  (optional, sftp only) yes | no. Default: yes.
+# ==============================================================================
+
+
+# ------------------------------------------------------------------------------
+#  1. repository
+# ------------------------------------------------------------------------------
+
+# --- Local repository ---------------------------------------------------------
+
+# Relative path: resolved against the folder that contains THIS file.
+repository = ./repo
+
+# Absolute path.
+# repository = /srv/restic-repo
+# repository = /Volumes/BackupDisk/restic-repo
+
+# "~" is expanded to your home directory.
+# repository = ~/backups/restic-repo
+
+# Quotes are optional; handy for paths with spaces.
+# repository = "/Volumes/My Backup Disk/restic repo"
+
+# Windows (drive letter or UNC path).
+# repository = C:\Backups\restic-repo
+# repository = \\nas\backups\restic-repo
+
+# --- sftp (restic starts "ssh"; see ssh_batch_mode below) -----------------------
+
+# user@host:/absolute/path
+# repository = sftp:backupuser@192.168.1.100:/srv/restic-repo
+
+# Without a leading "/" the path is relative to the remote user's home directory.
+# repository = sftp:backupuser@nas.local:restic-repo
+
+# URL form: needed for a port or an IPv6 address. Note the DOUBLE slash before an
+# absolute path: the first "/" ends the connection part, the second starts the path.
+# repository = sftp://backupuser@nas.local:2222//srv/restic-repo
+# repository = sftp://backupuser@[::1]:2222//srv/restic-repo
+
+# A host alias defined in ~/.ssh/config (user, port, key... live there).
+# repository = sftp:nas:/srv/restic-repo
+
+# --- Other backends -----------------------------------------------------------
+# Credentials for these are read by restic from the environment (variables that
+# Yazi was started with), e.g. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY for s3.
+# Do not put secrets in this file.
+
+# restic REST server.
+# repository = rest:https://backup.example.org:8000/myrepo/
+
+# Amazon S3 and S3-compatible services (MinIO, Wasabi, ...).
+# repository = s3:s3.amazonaws.com/my-bucket/restic
+# repository = s3:https://minio.example.org:9000/my-bucket/restic
+
+# Backblaze B2, Azure Blob Storage, Google Cloud Storage.
+# repository = b2:my-bucket:restic
+# repository = azure:my-container:/restic
+# repository = gs:my-bucket:/restic
+
+# Any remote known to rclone (rclone must be installed and configured).
+# repository = rclone:mydrive:backups/restic
+
+
+# ------------------------------------------------------------------------------
+#  2. restic_exec — optional
+# ------------------------------------------------------------------------------
+# Needed only when "restic" is not on the PATH Yazi sees, or to pick a specific
+# version. "~" is expanded. Without this line the PATH is searched.
+
+# restic_exec = /opt/homebrew/bin/restic
+# restic_exec = /usr/local/bin/restic
+# restic_exec = ~/bin/restic
+# restic_exec = C:\Tools\restic\restic.exe
+
+
+# ------------------------------------------------------------------------------
+#  3. ssh_batch_mode — optional, sftp repositories only
+# ------------------------------------------------------------------------------
+# ssh must never ask questions (passphrase, password, "trust this host?") on the
+# terminal Yazi is drawing on. With "yes" (the default) the plugin passes
+# "-o BatchMode=yes" to ssh, which then fails at once with a readable message.
+# For this to work, use a key WITHOUT passphrase or one loaded in ssh-agent, and
+# connect once from a terminal to accept the host key.
+#
+# Set "no" only if you know ssh can safely prompt in your setup.
+# Accepted values: yes, no, true, false, on, off, 1, 0.
+
+# ssh_batch_mode = yes
+# ssh_batch_mode = no
