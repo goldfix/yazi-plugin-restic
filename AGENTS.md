@@ -100,7 +100,7 @@ backed-up permissions; restore exits 0 when the include matches nothing. Empty `
 Flow:
 1. **Open** (`<Enter>` on `*.restic`): parse config → resolve binary → ask password → `snapshots --json` →
    create the session root `/tmp/yazi-restic-<uid>/<repo_id>/` (per-user dir, mode 700; Windows: `%TEMP%\yazi-restic\<repo_id>`) with one dir per snapshot
-   (`<timestamp>__<short_id>__<hostname>__[<tags>]`, each holding `.unfetched`) + relative `latest` symlink → `cd`.
+   (`<local-time timestamp>__<short_id>__<hostname>__[<tags>]`, each holding `.unfetched`) + relative `latest` symlink → `cd`.
    Yazi keeps the logical path when entering `latest`, so `ghost.locate(root, path, latest)` resolves the alias
    (session field `latest`); every caller must pass it.
    **An existing root is reused**, not wiped: snapshots are immutable, so folders and fetched files stay valid;
@@ -121,7 +121,12 @@ Flow:
    `restore` is ~5x faster than streaming `dump` through Lua (256 MB: 0.8 s vs 4.6 s). Files with size > 0 are
    already cached and just opened.
 5. **Restore** (`plugin restic -- restore`): `ya.input` for the destination (`restore.destination`: `~` expanded,
-   must be absolute and outside the ghost tree), then `restore <snap> --target <dest> --include <path>` per item.
+   must be absolute and outside the ghost tree). `restore.plan` turns the selection (or the hovered entry; note
+   `cx.active.selected` yields `File`s: `.url`) into one group per snapshot (duplicates, entries below another selected
+   entry and non-backup paths such as `.unfetched` dropped; the skipped ones are counted and reported), then ONE
+   `restore <snap> --target <dest> --include <p1> --include <p2>…` per snapshot (`Client:restore(id, includes, dest)`;
+   a `/` include = whole snapshot). Progress notification per group, summary with elapsed time; on success the
+   selection is cleared (`ya.emit("escape", { select = true })`), on failure it is kept.
 
 ## 5. Repository layout
 
@@ -130,9 +135,9 @@ restic.yazi/          the plugin (symlink/copy into ~/.config/yazi/plugins/)
   main.lua            entry point only: dispatch, no business logic
   config.lua          .restic parser, binary resolution + min version, paths (~, absolute), repo id
   client.lua          restic CLI wrapper (env, sftp BatchMode, JSON/JSONL, errors, fetch, restore)
-  snapshots.lua       snapshot dir naming / parsing / ordering
+  snapshots.lua       snapshot dir naming (local time) / parsing / ordering by real instant (`epoch`)
   ghost.lua           ghost tree create/reuse/expand, path mapping (+ `latest` alias), staging, per-user dir
-  restore.lua         restore planning (ghost paths -> snapshot paths), destination validation
+  restore.lua         restore planning (ghost paths -> per-snapshot groups), progress texts, destination validation
   preview.lua         rows of the metadata preview (pure)
   util.lua            small pure helpers
   version.lua         `return { version = "X.Y.Z" }`: last released version, single source of truth (bumped by the release skill)
@@ -208,6 +213,8 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 | Metadata preview      | hover a ghost entry                          | type/size/dates/perms from the backup are shown            |
 | Fetch on demand       | `<Enter>` on a 0-byte file                   | file is restored locally, then opened                      |
 | Restore               | restore a complex folder                     | whole folder written to the chosen destination             |
+| Multi-restore         | select several entries with Space, `r e`     | all restored with one restic call per snapshot, selection cleared |
+| Local-time names      | run Yazi with another `TZ`                   | snapshot folder names show that zone's local time          |
 | Installed version     | `plugin restic -- version`                   | notification with the build label (`0.1.0` or `0.1.0-dev.…`) |
 | Browse via `latest`   | enter `latest` and navigate                  | same behaviour as the snapshot directory                   |
 | Wrong password        | wrong password                               | error notification, no session created                     |
@@ -230,6 +237,8 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 - **Anything Yazi-facing needs an e2e test**: Lua unit tests passed while Yazi refused to start (module returning a
   string), while a `ya.sync` accessor dropped a field, and while selection restore read `cx.active.selected` wrongly
   (it yields `File` objects: use `.url`). Prove new tests can fail (revert the fix once).
+- **e2e alone**: run the e2e suite without other heavy jobs in parallel; on macOS a killed `yazi` can hang in exit until
+  the pty is drained (`driver.close()` pumps it; a stalled run usually shows a `(yazi)` zombie).
 - **Long commands** (`pytest tests/e2e` ≈2 min, `release.py build --e2e` ≈3 min): run them in the background with a
   log file or give an explicit timeout; a long foreground call gets aborted.
 - After every work block update `MEMORY.md` (status, decisions, session log), this file (facts/layout) and run the

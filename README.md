@@ -406,7 +406,10 @@ local and SFTP-over-local-`sftp-server` repositories are covered by the automate
 - On case-insensitive filesystems (macOS default, Windows) backup entries whose names differ only by case collapse
   into one entry.
 - On Windows, names that Windows forbids (`a:b`, `con`…) make their folder fail to list; Windows is otherwise untested.
-- Restoring selections from several snapshots into one destination lets later items overwrite earlier ones.
+- Restoring selections from several snapshots into one destination lets later snapshots overwrite earlier ones where
+  paths overlap. If one path of a snapshot cannot be restored, that snapshot's whole group fails (the selection is kept).
+- When a browsing tree is reused after the snapshot folder naming changed (e.g. you moved to another time zone), the
+  affected snapshots are rebuilt and their already-fetched files are downloaded again.
 - The browsing tree can only follow one repository at a time.
 
 ---
@@ -506,7 +509,7 @@ unit-testable without Yazi.
 |---|---|---|
 | Unit (`spec/`) | parsing, naming, path mapping, error handling, argument building — with a Yazi mock | `busted` |
 | Integration (`tests/integration/`) | `client` and `ghost` against a real restic repository, and the ssh options against a fake `ssh` | `busted` |
-| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, open, restore, reopen, `latest`, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~2 min) |
+| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, open, restore of folders and of multiple selections, reopen, `latest`, local-time folder names, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~2 min) |
 | Tooling (`tests/tooling/`) | version bumping, changelog, packaging, `install.sh`, the release flow in a throw-away git repo | `uv run --no-sync pytest tests/tooling` |
 
 ---
@@ -562,7 +565,8 @@ Legend: `[x]` done, `[ ]` open.
 
 - [x] Lazy browsing of snapshots with a ghost filesystem (no FUSE), including the `latest` alias
 - [x] Backup metadata in the preview pane
-- [x] Fetch-and-open on `Enter`; restore of single or multiple entries
+- [x] Fetch-and-open on `Enter`; restore of single or multiple entries (one restic call per snapshot, progress, selection cleared)
+- [x] Snapshot folders named in your local time, `latest` chosen by the real instant (hosts in different time zones)
 - [x] Password in memory only; hardened temp folder; safe handling of odd names and symlinks
 - [x] SFTP without prompts inside the TUI (`ssh_batch_mode`)
 - [x] Reuse of the browsing tree when reopening a repository
@@ -572,7 +576,7 @@ Legend: `[x]` done, `[ ]` open.
 
 - [ ] **Try the first build on real repositories** (SFTP to a real server, REST, S3…) and cut release `0.1.0`
 - [ ] **Preview the content of files already fetched** (text, images…) instead of only their metadata
-- [ ] **Confirm before a restore overwrites existing files**; show progress for long restores
+- [ ] **Confirm before a restore overwrites existing files**; finer progress for long restores (today per snapshot, not per file)
 - [ ] **Configurable default restore folder** (`require("restic"):setup { restore_dir = "…" }`)
 - [ ] **Mark fetched files** in the listing (e.g. a custom linemode that also shows the real size of placeholders)
 - [ ] **Publish the repository and releases**: `ya pkg add` only works once the repository is public on GitHub; attach the
