@@ -48,6 +48,25 @@ describe("preview.rows", function()
   end)
 end)
 
+describe("preview.compact / preview.timestamp", function()
+  it(
+    "drops nil, empty strings and empty lists, keeping the order",
+    function()
+      assert.same({
+        { label = "a", value = "1" },
+        { label = "d", value = { "x", "y" } },
+      }, preview.compact { { "a", "1" }, { "b", nil }, { "c", "" }, { "e", {} }, { "d", { "x", "y" } } })
+    end
+  )
+
+  it("formats restic timestamps and keeps anything else as it is", function()
+    assert.equals("2026-10-19 20:21:21 +02:00", preview.timestamp("2026-10-19T20:21:21.93+02:00"))
+    assert.equals("2026-10-19 20:21:21 UTC", preview.timestamp("2026-10-19T20:21:21Z"))
+    assert.equals("yesterday", preview.timestamp("yesterday"))
+    assert.is_nil(preview.timestamp(nil))
+  end)
+end)
+
 describe("restore.plan", function()
   local root = "/tmp/yazi-restic-1"
   local name = "2026-10-19_20-21-21__e3e4a9ff__h__[]"
@@ -60,11 +79,12 @@ describe("restore.plan", function()
       snap .. "/data/docs",
       "/etc/passwd",
       root, -- the ghost root itself
-      snap .. "/data/.unfetched", -- the plugin's marker
+      snap .. "/data/(not listed yet)", -- the plugin's marker
+      snap .. "/data/.unfetched", -- the marker of older versions
       snap .. "/data/a",
     })
     assert.same({ { short_id = "e3e4a9ff", paths = { "/data/docs", "/data/a" } } }, groups)
-    assert.equals(3, skipped)
+    assert.equals(4, skipped)
   end)
 
   it("resolves 'latest' and treats it as the same snapshot", function()

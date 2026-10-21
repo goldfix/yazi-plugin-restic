@@ -20,7 +20,7 @@ end
 --- Translate ghost paths (selection or hovered entry) to one group per snapshot, so that each snapshot needs a
 --- single `restic restore` call. Duplicates (also those reached through `latest`) are dropped, and so is an entry
 --- whose ancestor is selected too (restic restores it anyway). Groups and paths keep the order of the input.
---- Paths that are not backup entries (outside the snapshot directories, or the plugin's `.unfetched` markers)
+--- Paths that are not backup entries (outside the snapshot directories, or the plugin's "not listed yet" markers)
 --- are skipped and counted, so that the caller can tell the user.
 ---@param root string
 ---@param ghost_paths string[]
@@ -31,7 +31,7 @@ function M.plan(root, ghost_paths, latest)
   local groups, by_id, skipped = {}, {}, 0
   for _, ghost_path in ipairs(ghost_paths) do
     local location = ghost.locate(root, ghost_path, latest)
-    if not location or util.basename(location.path) == ghost.MARKER then
+    if not location or ghost.is_marker(util.basename(location.path)) then
       skipped = skipped + 1
     else
       local group = by_id[location.short_id]

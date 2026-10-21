@@ -13,7 +13,9 @@ What you get:
 - **Browse snapshots like folders**, with Yazi's three-column view, including a `latest` shortcut to the newest one.
 - **Instant start, even on huge repositories.** Folders are read from the backup only when you look at them.
 - **See what the backup knows** about the highlighted file or folder: size, dates, permissions, owner, original path,
-  and whether you already have a local copy.
+  and whether you already have a local copy. Press `Tab` for more: what a folder contains, the details of a snapshot
+  (host, paths, tags, how long the backup took, how many files changed…) and the statistics of the whole repository
+  (number of snapshots, space used, compression).
 - **Open a file straight from the backup.** Press `Enter` and the file is fetched and opened with your usual program.
 - **Restore** one or many files and folders to any directory.
 - **No FUSE, nothing mounted**, no daemon, nothing to clean up by hand.
@@ -69,6 +71,11 @@ require("restic"):setup()
 # yazi.toml
 [plugin]
 prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
+prepend_spotters = [
+  { url = "/tmp/yazi-restic-*/**",  run = "restic" },   # files in the browsing tree
+  { url = "/tmp/yazi-restic-*/**/", run = "restic" },   # folders in the browsing tree
+  { url = "*.restic",               run = "restic" },   # repository statistics
+]
 ```
 
 ```toml
@@ -76,6 +83,14 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 [[mgr.prepend_keymap]]
 on  = "<Enter>"
 run = "plugin restic -- enter"      # open a repository / fetch+open a backed-up file / otherwise behave as usual
+
+[[mgr.prepend_keymap]]
+on  = "<Left>"
+run = "plugin restic -- leave"      # like "up one level"; from the top of a backup it returns to the .restic file
+
+[[mgr.prepend_keymap]]
+on  = "h"
+run = "plugin restic -- leave"      # the same for the vim key (two entries: a list in `on` would be a key sequence)
 
 [[mgr.prepend_keymap]]
 on  = [ "r", "e" ]
@@ -116,6 +131,7 @@ to `install.sh` in every build).
 | Open a repository | highlight the `.restic` file, press `Enter`, type the password |
 | Browse | `h` `j` `k` `l` as always — one folder per snapshot, plus `latest` |
 | See backup details | just highlight a file or folder |
+| See more details | `Tab` on a file, folder or snapshot; `Tab` on a `.restic` file for the repository statistics |
 | Open a backed-up file | `Enter` on it (it is fetched, then opened) |
 | Restore | select entries (or highlight one), press `r` `e`, type the destination folder |
 
@@ -185,22 +201,31 @@ place (see [Installing](#installing)); neither ever edits your configuration fil
 require("restic"):setup()
 ```
 
-**`yazi.toml`** — the previewer that shows the backup details of the highlighted entry. Required for the details pane;
-the pattern is where the plugin keeps its temporary tree on macOS/Linux (on Windows the temporary folder is
-different; Windows is untested).
+**`yazi.toml`** — the previewer that shows the backup details of the highlighted entry (required for the details
+pane) and the spotter behind `Tab` (optional: without it `Tab` keeps doing what Yazi does, showing the mime type). The
+pattern is where the plugin keeps its temporary tree on macOS/Linux (on Windows the temporary folder is different;
+Windows is untested). Yazi matches files and folders with separate rules (a trailing `/` means "folders"), hence the
+two spotter rules for the tree; the third one makes `Tab` work on `.restic` files.
 
 ```toml
 [plugin]
 prepend_previewers = [
   { url = "/tmp/yazi-restic-*/**", run = "restic" },
 ]
+prepend_spotters = [
+  { url = "/tmp/yazi-restic-*/**",  run = "restic" },   # files in the browsing tree
+  { url = "/tmp/yazi-restic-*/**/", run = "restic" },   # folders in the browsing tree
+  { url = "*.restic",               run = "restic" },   # repository statistics
+]
 ```
 
-**`keymap.toml`** — the keys. The plugin has three actions, bind them to whatever you like:
+**`keymap.toml`** — the keys. The plugin has five actions, bind them to whatever you like:
 
 | Action | What it does |
 |---|---|
 | `plugin restic -- enter` | "Smart enter": on a `.restic` file opens the repository; on a backed-up file fetches it and opens it; anywhere else behaves exactly like Yazi's own `Enter`. |
+| `plugin restic -- leave` | "Smart leave": from the top of a browsing tree (the folder that lists the snapshots) it goes back to the folder of the `.restic` file you opened, with the file highlighted; anywhere else it behaves exactly like Yazi's own `leave` (`h`). |
+| `plugin restic -- back` | Jumps to the `.restic` file of the open repository from anywhere, even deep inside a snapshot. |
 | `plugin restic -- restore` | Restores the selected entries (or the highlighted one) to a folder you type. |
 | `plugin restic -- version` | Shows the installed plugin version in a notification (dev builds read `X.Y.Z-dev.<sha>`). |
 
@@ -209,6 +234,21 @@ prepend_previewers = [
 on   = "<Enter>"
 run  = "plugin restic -- enter"
 desc = "Open (restic aware)"
+
+[[mgr.prepend_keymap]]
+on   = "<Left>"
+run  = "plugin restic -- leave"
+desc = "Leave (back to the .restic file from the top of a backup)"
+
+[[mgr.prepend_keymap]]
+on   = "h"
+run  = "plugin restic -- leave"
+desc = "Leave (back to the .restic file from the top of a backup)"
+
+[[mgr.prepend_keymap]]
+on   = [ "r", "b" ]
+run  = "plugin restic -- back"
+desc = "Back to the .restic file of the open repository"
 
 [[mgr.prepend_keymap]]
 on   = [ "r", "e" ]
@@ -221,7 +261,7 @@ run  = "plugin restic -- version"
 desc = "Show the restic.yazi version"
 ```
 
-If you do not want to change `Enter`, bind `plugin restic -- enter` to another key, for example `on = "o"`; the rest
+If you do not want to change `Enter`, `h` or `←`, bind `plugin restic -- enter` to another key, for example `on = "o"`; the rest
 works the same. Pick keys that are free in your own keymap: by default `r` alone is Yazi's *rename*, so if you rely on
 it, use another prefix for the restore/version keys (for example `[ "R", "e" ]`).
 
@@ -373,8 +413,10 @@ SFTP-over-local-`sftp-server` repositories.)
 | Open a repository | highlight a `.restic` file, `Enter`, type the password. Yazi jumps to the browsing tree: one folder per snapshot, named `<date>__<id>__<host>__[<tags>]` (date and time in **your** local time zone, as `restic snapshots` prints them), newest last, plus `latest`. |
 | Browse | the usual `h`/`j`/`k`/`l`. A folder is listed the first time you enter it *or rest the cursor on it* (so the preview column shows its content). |
 | See backup details | highlight any entry: type, size, permissions, owner, modified/accessed/changed dates, original path, local copy yes/no. |
+| More details | `Tab` opens Yazi's "spot" table (by default `Tab` or `Esc` closes it, `j`/`k` scroll, `h`/`l` jump to the previous/next entry, `c` `c` copies the selected cell). On a **file or folder** of a snapshot it repeats the preview and, for a folder, adds what it directly contains (items and the size of its files). On a **snapshot** folder (or `latest`) it shows the snapshot: id, time, host, user, paths, tags, excludes, tree and parent ids, restic version and, when restic recorded it (0.17+), the backup run: duration, files and folders new/changed/unmodified, data processed and added. On the **session root** or on a **`.restic` file** it shows the repository: number of snapshots, first and last, hosts, the latest snapshot's size, and the storage statistics (stored size, size without compression, compression ratio, blobs). The snapshot part appears at once and the storage figures a moment later: restic reads the folder structure of every snapshot (not the file contents; each distinct folder once, usually from its local cache), which takes a few seconds on a large or remote repository. Closing the table stops it. On a `.restic` file the password of the repository you have open is reused; otherwise you are asked for it (and, as always, it is not kept). With entries selected, `Tab` in the browsing tree still describes the highlighted entry (Yazi's own multi-selection summary would add up the sizes of the empty placeholders). |
 | Open a file | `Enter`. Files appear as empty placeholders; the real content is fetched from the backup, then opened with whatever program Yazi's `open` rules choose. Later `Enter`s on the same file open the local copy at once. |
 | Restore | select entries with `Space` (or just highlight one), `r` `e`, confirm or edit the destination. Several entries from several snapshots can be restored at once; entries of the same snapshot go into a single `restic restore` call, a notification shows `Restoring 5 item(s) from snapshot e3e4a9ff` (with `(1/2)` when several snapshots are involved), and a final one the elapsed time. On success the selection is cleared; on failure it is kept, so you can retry. |
+| Leave the backup | `h` or `←` as usual; at the top (the list of snapshots) one more press returns to the `.restic` file (needs the `leave` binding). `r` `b` jumps there from anywhere. |
 | Installed version | `r` `v` |
 | Reopen a repository | same as opening. Files you already fetched are still there; every folder is simply listed again once, so new snapshots appear. |
 
@@ -391,13 +433,17 @@ SFTP-over-local-`sftp-server` repositories.)
 | `Nothing to restore here` | The highlighted entries are not inside a snapshot. |
 | `N selected item(s) are not in the backup and will be skipped` | The selection (Yazi keeps it across folders) also holds files outside the snapshots; the rest is restored. |
 | `… is already being restored` | The same file is being fetched; wait for it. |
+| A file called `(not listed yet)` | The folder is being read from the backup; it disappears when the listing is done. If it stays, the listing failed (an error was shown): leave the folder and enter it again to retry. |
+| `h` / `←` at the top of a backup does not go back to the `.restic` file | The key is not bound to `plugin restic -- leave` (see [Configuring Yazi](#configuring-yazi)); `r` `b` (`back`) works from anywhere. |
+| `Error: Lua runtime failed … Failed to load plugin from …/restic.yazi/main.lua` when Yazi starts | `init.lua` calls `require("restic")` but the plugin is not in `~/.config/yazi/plugins/restic.yazi` (never installed, or the folder was deleted). Install it again, see [Installing](#installing). |
 | Nothing happens on `Enter` / `r e` | The keymap is missing, or the plugin is not in `plugins/restic.yazi`. Press `r` `v` to check. |
 
 ### Privacy and safety
 
 - The browsing tree is created with mode `700`, and the plugin refuses to use `/tmp/yazi-restic-<uid>` if it is not a
   real folder owned by you (protection against another user pre-creating it).
-- Names in a backup that cannot exist safely on disk (empty, `.`, `..`, containing `/`, `\` or NUL) are skipped.
+- Names in a backup that cannot exist safely on disk (empty, `.`, `..`, containing `/`, `\` or NUL) are skipped, and so
+  are the two names the plugin reserves for its markers: `(not listed yet)` and `.unfetched` (used up to 0.5.0).
   Symbolic links in a backup appear as empty regular files — they are never created as real links, so a malicious
   backup cannot make the plugin touch files outside the tree.
 - Restores never write into the browsing tree.
@@ -431,7 +477,7 @@ and answer "what is this entry?".
                               │
                               └──> ghost.lua            /tmp/yazi-restic-<uid>/<repo id>/
                                       │                   ├─ 2026-10-19_20-21-21__e3e4a9ff__host__[tag]/   one dir per snapshot
-                                      │                   │    └─ data/  (+ a hidden marker while "not listed yet")
+                                      │                   │    └─ data/  (+ a visible marker file while "not listed yet")
                                       │                   │         ├─ docs/        ← real directory
                                       │                   │         └─ a.txt        ← 0 bytes until opened
                                       │                   ├─ latest -> <newest snapshot dir>   (relative symlink)
@@ -441,20 +487,27 @@ and answer "what is this entry?".
  Yazi ── Enter on a file ──────────>   `restic restore <id>:<dir> --include /<name>` → into .staging, rename into place
  Yazi ── r e ──────────────────────>   `restic restore <id> --target <dest> --include <path>`
  Yazi ── hover ──> previewer           shows the metadata of the entry (from memory, not from the 0-byte file)
+ Yazi ── Tab ────> spotter             entry / snapshot details from memory; repository: `restic snapshots` + `restic stats`
 ```
 
 The flow in words:
 
 1. **Open.** `Enter` on a `.restic` file: parse it, find and version-check restic, ask for the password, run
    `restic snapshots --json`. Under `/tmp/yazi-restic-<uid>/<repository id>/` create one folder per snapshot (each
-   carrying a hidden `.unfetched` marker) and the `latest` link, then `cd` there. If the tree already exists from an
+   carrying a marker file called `(not listed yet)`) and the `latest` link, then `cd` there. If the tree already exists from an
    earlier session it is **reused**: snapshots are immutable, so folders and fetched files stay valid; vanished
    snapshots are removed, new ones added, and every folder is re-marked so it is listed again once.
 2. **Expand lazily.** Whenever Yazi enters a folder (`cd` hook) or the cursor rests on one for 0.4 s (`hover` hook, so
    the preview pane can show its content), and the folder carries the marker, the plugin runs
    `restic ls <snapshot> <path> --json` (one level, no recursion), creates the children (directories with a marker of
-   their own, files as 0-byte placeholders), stores each child's metadata **in memory only**, and removes the marker.
-3. **Preview.** A previewer plugin renders the stored metadata for the highlighted entry.
+   their own, files as 0-byte placeholders), stores each child's metadata **in memory only**, and removes the marker. The marker is a normal, visible file on purpose: a folder that is still being read shows
+   `(not listed yet)` (and "Reading this folder from the backup..." in the preview) instead of Yazi's "No items", which
+   is left for folders that really are empty.
+3. **Preview and spot.** A previewer plugin renders the stored metadata for the highlighted entry. The spotter
+   (`Tab`) shows the same plus the snapshot record kept in memory when the repository was opened, the folder contents
+   counted from the listed entries, or, for a repository, `restic snapshots` and `restic stats --mode raw-data` (run
+   when you press `Tab`, never at startup). Paths through `latest` are stored under the real snapshot folder, so
+   what was listed through one spelling is known through the other.
 4. **Open a file.** On a 0-byte placeholder with a non-zero size in the backup, run
    `restic restore <id>:<parent dir> --include /<name>` into a private folder under `.staging/`, then rename the result
    over the placeholder. Using the `<id>:<folder>` form restores the file directly, without recreating its parent
@@ -479,13 +532,14 @@ Design decisions worth knowing:
 
 ```
 restic.yazi/               the plugin (this is what gets installed)
-  main.lua                   entry point only: wiring to Yazi (hooks, actions, previewer), no business logic
+  main.lua                   entry point only: wiring to Yazi (hooks, actions, previewer, spotter), no business logic
   config.lua                 .restic parser, restic binary resolution + minimum version, paths (~, relative, absolute)
   client.lua                 restic CLI wrapper: environment, SFTP batch mode, JSON/JSONL parsing, error messages
   snapshots.lua              snapshot folder naming, parsing and ordering
   ghost.lua                  ghost tree: create / reuse / lazily expand, path mapping (+ `latest`), staging, user dir
   restore.lua                restore planning (ghost paths → snapshot paths) and destination validation
   preview.lua                the rows of the metadata preview (pure)
+  info.lua                   the sections of the `Tab` spotter: entry, snapshot, repository (pure)
   util.lua                   small pure helpers
   version.lua                the plugin version (single source of truth)
   README.md, LICENSE         git symlinks to the root files (single copies; see "Building and development")
@@ -510,7 +564,7 @@ unit-testable without Yazi.
 |---|---|---|
 | Unit (`spec/`) | parsing, naming, path mapping, error handling, argument building — with a Yazi mock | `busted` |
 | Integration (`tests/integration/`) | `client` and `ghost` against a real restic repository, and the ssh options against a fake `ssh` | `busted` |
-| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, open, restore of folders and of multiple selections, reopen, `latest`, local-time folder names, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~2 min) |
+| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, `Tab` details, open, restore of folders and of multiple selections, reopen, `latest`, local-time folder names, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~4 min) |
 | Tooling (`tests/tooling/`) | version bumping, changelog, packaging, `install.sh`, the release flow in a throw-away git repo | `uv run --no-sync pytest tests/tooling` |
 
 ---

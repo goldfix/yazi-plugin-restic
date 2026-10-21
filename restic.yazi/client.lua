@@ -124,6 +124,20 @@ function Client:snapshots()
   return self:decode(stdout)
 end
 
+--- Repository statistics of all snapshots (`restic stats --json`). `raw-data` (the default here) sums the unique
+--- blobs the snapshots use: restic reads each distinct folder tree once (tree blobs are usually in restic's local
+--- cache) and never file contents, whereas `restore-size` visits every entry of every snapshot again.
+---@param mode? "raw-data"|"restore-size"|"files-by-contents"|"blobs-per-file"
+---@return table? stats  `total_size`, `total_blob_count`, `snapshots_count`, compression fields (repository v2)…
+---@return string? err
+function Client:stats(mode)
+  local stdout, err = self:run { "stats", "--json", "--mode", mode or "raw-data" }
+  if not stdout then
+    return nil, err
+  end
+  return self:decode(stdout)
+end
+
 --- Records of `restic ls --json` for one directory (JSON Lines): the snapshot header, the directory itself
 --- and its direct children. Filtering is left to the caller (see `ghost.children`).
 ---@param snapshot_id string

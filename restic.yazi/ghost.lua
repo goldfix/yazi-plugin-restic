@@ -5,16 +5,27 @@
 ---     <snapshot dir>/                          see snapshots.dirname()
 ---       <absolute path of the backed-up tree>  e.g. home/me/docs/report.md (0 bytes until fetched)
 ---
---- Directories not yet listed hold a `.unfetched` marker (set again on every folder of a reused tree).
---- Entering one lists a single level from restic (see `expand`), creates the children (directories get
---- their own marker) and removes the marker.
+--- Directories not yet listed hold a visible marker file (`MARKER`, set again on every folder of a reused tree), so
+--- that a folder still being read shows "(not listed yet)" rather than Yazi's "No items". Entering one lists a
+--- single level from restic (see `expand`), creates the children (directories get their own marker) and removes
+--- the marker.
 local snapshots = require(".snapshots")
 local util = require(".util")
 
 local M = {}
 
---- Name of the sentinel file that flags a directory whose content has not been fetched yet.
-M.MARKER = ".unfetched"
+--- Name of the sentinel file that flags a directory whose content has not been fetched yet. It is deliberately
+--- NOT a dot file: Yazi hides those, and an unlisted folder would look empty ("No items") while it loads.
+M.MARKER = "(not listed yet)"
+
+--- The (hidden) marker of plugin versions up to 0.5.0. Still a reserved name, so that every file called so in a tree
+--- is known to be an old marker: reused trees drop them (see `reflag`).
+M.LEGACY_MARKER = ".unfetched"
+
+--- Whether a name is one of the plugin's markers (not a backup entry).
+---@param name string
+---@return boolean
+function M.is_marker(name) return name == M.MARKER or name == M.LEGACY_MARKER end
 
 --- Name of the symlink, below the root, to the newest snapshot directory.
 M.LATEST = "latest"
@@ -99,6 +110,21 @@ function M.locate(root, ghost_path, latest)
   return { snapshot_dir = snapshot_dir, short_id = short_id, path = rest == "" and "/" or rest }
 end
 
+--- The path through the real snapshot directory of a path through the `latest` link (other paths unchanged).
+--- Both spellings name the same file, so the in-memory tables (metadata, busy flags) use this one as the key:
+--- otherwise a folder listed through one spelling would look unknown through the other.
+---@param root string
+---@param path string
+---@param latest? string  Snapshot directory `latest` points to.
+---@return string
+function M.canonical(root, path, latest)
+  local alias = util.join(root, M.LATEST)
+  if latest and (path == alias or path:sub(1, #alias + 1) == alias .. "/") then
+    return util.join(root, latest) .. path:sub(#alias + 1)
+  end
+  return path
+end
+
 --- A fresh, unique staging directory for `Client:fetch` (see `STAGING`); not created here.
 ---@param root string
 ---@param dest string  File being fetched.
@@ -113,7 +139,7 @@ end
 ---@param name string
 ---@return boolean
 function M.safe_name(name)
-  return name ~= "" and name ~= "." and name ~= ".." and name ~= M.MARKER and not name:find("[/\\%z]")
+  return name ~= "" and name ~= "." and name ~= ".." and not M.is_marker(name) and not name:find("[/\\%z]")
 end
 
 --- Direct children of `dir` among the records of `restic ls --json` (drops the snapshot header, the
@@ -166,6 +192,7 @@ end
 ---@return boolean? ok
 ---@return string? err
 local function reflag(fsx, dir)
+  fsx.remove(util.join(dir, M.LEGACY_MARKER)) -- tree made by an older version (usually absent: error ignored)
   local ok, err = ensure_file(fsx, util.join(dir, M.MARKER))
   for _, name in ipairs(ok and fsx.dirs(dir) or {}) do
     ok, err = reflag(fsx, util.join(dir, name))
@@ -180,7 +207,7 @@ end
 ---@field latest? string  Name of the newest snapshot directory (target of the `latest` symlink).
 
 --- Create the ghost root, or reuse it if it already exists: one directory per snapshot (flagged
---- `.unfetched`) and a `latest` symlink to the newest one.
+--- the marker) and a `latest` symlink to the newest one.
 ---
 --- Snapshots are immutable and their directory name contains their id, so what is already in the tree
 --- stays valid, fetched files included. Directories of snapshots that no longer exist are removed, and so
@@ -238,7 +265,7 @@ end
 ---@field client table  See client.lua.
 
 --- Populate one level of the ghost tree: list `ghost_dir` from restic, create its children (directories
---- carry a `.unfetched` marker, files are empty) and finally drop the marker of `ghost_dir`.
+--- carry the marker, files are empty) and finally drop the marker of `ghost_dir`.
 --- Idempotent: it never truncates a file that was already fetched.
 ---@param session GhostSession
 ---@param ghost_dir string

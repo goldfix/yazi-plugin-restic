@@ -25,6 +25,14 @@ on  = [ "r", "e" ]
 run = "plugin restic -- restore"
 
 [[mgr.prepend_keymap]]
+on  = "H"
+run = "plugin restic -- leave"
+
+[[mgr.prepend_keymap]]
+on  = [ "r", "b" ]
+run = "plugin restic -- back"
+
+[[mgr.prepend_keymap]]
 on  = [ "r", "v" ]
 run = "plugin restic -- version"
 """
@@ -32,6 +40,11 @@ run = "plugin restic -- version"
 YAZI_TOML = """
 [plugin]
 prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
+prepend_spotters = [
+  { url = "/tmp/yazi-restic-*/**", run = "restic" },
+  { url = "/tmp/yazi-restic-*/**/", run = "restic" },
+  { url = "*.restic", run = "restic" },
+]
 
 [opener]
 logopen = [ { run = 'echo "OPENED $(basename %s1) $(wc -c < %s1 | tr -d " ")" >> "$E2E_OPEN_LOG"', desc = "log" } ]

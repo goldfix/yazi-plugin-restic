@@ -13,12 +13,31 @@ local M = {}
 ---@field short_id? string
 ---@field time string  ISO-8601, e.g. "2026-10-19T20:21:21.93+02:00".
 ---@field hostname string
+---@field username? string
+---@field uid? integer
+---@field gid? integer
 ---@field paths string[]
 ---@field tags? string[]
+---@field excludes? string[]
+---@field tree? string
+---@field parent? string
+---@field program_version? string
+---@field summary? table  Backup statistics (`backup_start`, `files_new`, `total_bytes_processed`…), restic 0.17+.
 
 ---@param snapshot ResticSnapshot
 ---@return string
-local function short_id(snapshot) return snapshot.short_id or snapshot.id:sub(1, 8) end
+function M.short_id(snapshot) return snapshot.short_id or snapshot.id:sub(1, 8) end
+
+--- Snapshots keyed by short id (the key of a ghost snapshot directory).
+---@param list ResticSnapshot[]
+---@return table<string, ResticSnapshot>
+function M.index(list)
+  local by_id = {}
+  for _, snapshot in ipairs(list) do
+    by_id[M.short_id(snapshot)] = snapshot
+  end
+  return by_id
+end
 
 --- Name-safe local date and time of an instant. A field so that tests can pin the time zone (UTC).
 ---@param seconds number  Seconds since the Unix epoch.
@@ -41,7 +60,7 @@ function M.dirname(snapshot)
   return string.format(
     "%s__%s__%s__[%s]",
     stamp,
-    short_id(snapshot),
+    M.short_id(snapshot),
     util.sanitize(snapshot.hostname),
     table.concat(tags, ",")
   )

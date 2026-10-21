@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from datetime import datetime
@@ -10,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from .conftest import PASSWORD
+from .conftest import PASSWORD, PLUGIN_DIR
 
 SFTP_SERVER = next((p for p in ("/usr/libexec/sftp-server", "/usr/lib/openssh/sftp-server", "/usr/lib/ssh/sftp-server") if Path(p).exists()), None)
 
@@ -72,7 +73,9 @@ def test_snapshot_folders_are_named_in_the_local_time_of_the_viewer(kolkata, wor
 def test_entering_a_folder_expands_it_and_drops_the_marker(in_data):
     screen = in_data.wait_for("a.txt")
     assert "docs" in screen
-    assert ".unfetched" not in screen
+    # the preview pane lists the highlighted `docs` folder, which shows the marker until the hover hook has read it
+    screen = in_data.wait_for("report.md")
+    assert "(not listed yet)" not in screen
 
 
 def test_hover_shows_backup_metadata(in_data):
@@ -166,9 +169,76 @@ def test_browsing_through_latest_works_like_the_snapshot_dir(repo_open):
     repo_open.wait_for("Local copy: yes")
 
 
+def test_latest_shares_what_was_listed_through_the_snapshot_dir(in_data):
+    """`latest/x` and `<snapshot dir>/x` are one file: metadata listed through one spelling serves the other (it used to
+    show "No backup information available", and Enter opened the empty placeholder)."""
+    in_data.wait_for("a.txt")  # data/ was listed through the snapshot directory
+    in_data.send("h")
+    in_data.send("h")
+    in_data.wait_for("latest")
+    in_data.send("j")  # latest
+    in_data.send("l")
+    in_data.wait_cwd("/latest")
+    in_data.send("l")
+    in_data.wait_cwd("/latest/data")
+    in_data.send("j")  # a.txt
+    in_data.wait_for("Backup path: /data/a.txt")
+    in_data.send("\r")
+    for _ in range(50):
+        if in_data.open_log.exists():
+            break
+        in_data.send("", settle=0.1)
+    assert "OPENED a.txt 6" in in_data.open_log.read_text()
+
+
+@pytest.fixture
+def slow_listing(workspace):
+    """The demo repository behind a restic wrapper whose `ls` takes 3 s, so that a folder stays "being read"."""
+    wrapper = workspace / "slow-restic"
+    wrapper.write_text(f'#!/bin/sh\nfor a in "$@"; do [ "$a" = ls ] && sleep 3; done\nexec {shutil.which("restic")} "$@"\n')
+    wrapper.chmod(0o755)
+    (workspace / "demo.restic").write_text(f"repository = ./repo\nrestic_exec = {wrapper}\n")
+
+
+def test_a_folder_still_being_read_shows_a_marker_instead_of_no_items(slow_listing, repo_open):
+    repo_open.send("l")  # enter the snapshot directory: its listing takes 3 s
+    repo_open.wait_for("(not listed yet)")
+    screen = repo_open.text
+    assert "No items" not in screen
+    assert "Reading this folder from the backup" in screen  # the preview of the marker
+    repo_open.send("\r")  # Enter on the marker must not try to open it
+    repo_open.wait_gone("(not listed yet)", timeout=15)  # the listing (3 s per `ls`, a few of them) is done
+    assert "data" in repo_open.text
+    assert not repo_open.open_log.exists()
+
+
+def test_back_returns_to_the_restic_file_from_anywhere_in_the_tree(in_data):
+    in_data.send("rb")
+    in_data.wait_cwd("/work")
+    in_data.wait_for("repository = ./repo")  # demo.restic is highlighted: its text is previewed
+
+
+def test_back_without_an_open_repository_says_so(yazi):
+    yazi.send("rb")
+    yazi.wait_for("No restic repository is open")
+
+
+def test_leave_from_the_top_of_the_tree_returns_to_the_restic_file(repo_open):
+    repo_open.send("H")
+    repo_open.wait_cwd("/work")
+    repo_open.wait_for("repository = ./repo")
+
+
+def test_leave_elsewhere_goes_up_one_level_as_usual(in_data):
+    in_data.send("H")
+    in_data.wait_cwd("[e2e]")  # from <snapshot>/data to the snapshot directory
+    assert "work" not in in_data.text.splitlines()[0]
+
+
 def test_version_action_reports_the_installed_version(yazi):
+    version = re.search(r'version = "([^"]+)"', (PLUGIN_DIR / "version.lua").read_text()).group(1)
     yazi.send("rv")
-    yazi.wait_for("restic.yazi 0.0.0")
+    yazi.wait_for(f"restic.yazi {version}")
 
 
 @pytest.fixture
@@ -191,7 +261,7 @@ def open_repo_file(yazi, downs):
     yazi.send("\r")
     yazi.wait_for("Repository password")
     yazi.send("secret\r")
-    return yazi.wait_for("Host key verification failed")  # ssh's own message, not restic's generic sftp error
+    return yazi.wait_for("Host key verification failed", timeout=10)  # ssh's own message, not restic's generic sftp error
 
 
 def test_sftp_repository_runs_ssh_in_batch_mode_by_default(sftp_setup, yazi):
@@ -248,3 +318,119 @@ def test_batch_mode_off_is_honoured_by_every_call_not_only_the_first(local_sftp,
     calls = local_sftp.read_text().splitlines()
     assert len(calls) >= 3, calls
     assert not any("BatchMode" in call for call in calls), calls
+
+
+def goto(yazi, path):
+    """Change directory with Yazi's interactive `cd` (g, Space)."""
+    yazi.send("g ")
+    yazi.wait_for("Change directory")
+    yazi.send(f"{path}\r")
+    yazi.wait_cwd("/" + path.name)  # the header is cut at the left on long paths
+
+
+def test_tab_on_a_file_shows_its_backup_details(in_data):
+    in_data.send("j")  # a.txt
+    in_data.wait_for("Backup path: /data/a.txt")
+    in_data.send("\t")
+    screen = in_data.wait_for("Backup entry")
+    assert "Backup path:  /data/a.txt" in screen
+    assert "Size:         6B (6 bytes)" in screen
+    assert "Local copy:   no" in screen
+    in_data.send("\t")  # Tab closes the spotter
+    assert "Backup entry" not in in_data.text
+
+
+def test_tab_on_a_folder_also_shows_what_it_contains(in_data):
+    in_data.wait_for("a.txt")  # the cursor is on docs/ (two files)
+    in_data.send("\t")
+    screen = in_data.wait_for("Contents")
+    assert "Items:" in screen and "2 files" in screen
+    assert "Files size:" in screen
+
+
+def test_tab_on_a_snapshot_shows_the_snapshot(repo_open):
+    repo_open.wait_for("data")
+    repo_open.send("\t")
+    screen = repo_open.wait_for("Backup run")
+    assert "ID:" in screen and "Host:" in screen
+    assert "Tags:" in screen and "e2e" in screen
+    assert "Paths:" in screen
+    assert "3 new, 0 changed, 0 unmodified" in screen  # a.txt, report.md, blob.bin
+
+
+@pytest.fixture
+def two_paths(tmp_path, workspace):
+    """A second, newer snapshot of two folders; returns the common start of their paths. Must run before Yazi starts."""
+    src = tmp_path / "src"
+    (src / "other").mkdir()
+    (src / "other" / "b.txt").write_text("b\n")
+    subprocess.run(
+        ["restic", "-r", str(workspace / "repo"), "backup", "data", "other", "--tag", "two"],
+        check=True,
+        cwd=src,
+        capture_output=True,
+        env=dict(os.environ, RESTIC_PASSWORD=PASSWORD),
+    )
+    return str(src.resolve())[:30]  # the start of both backed-up paths (the rest does not fit on screen)
+
+
+def test_tab_shows_one_line_per_path_of_a_snapshot(two_paths, repo_open):
+    repo_open.wait_for("latest")
+    repo_open.send("j")  # the newer snapshot, backed up from two folders
+    repo_open.wait_for("[two]")  # the status bar shows the hovered name in full
+    repo_open.send("\t")
+    screen = repo_open.wait_for("Backup run")
+    assert "Tags:         two" in screen
+    paths = [line for line in screen.splitlines() if two_paths in line]
+    assert len(paths) == 2, screen  # "Paths:" and its continuation line
+
+
+def test_tab_on_latest_says_so(repo_open):
+    repo_open.wait_for("data")  # the first level of the hovered snapshot is listed
+    repo_open.send("j")  # the `latest` link sorts after the only snapshot directory
+    repo_open.wait_for("-> ")
+    repo_open.send("\t")
+    assert "(latest)" in repo_open.wait_for("Backup run")
+
+
+def test_tab_on_a_restic_file_shows_the_repository_statistics(yazi):
+    yazi.send("j")  # demo.restic
+    yazi.send("\t")
+    yazi.wait_for("Repository password")
+    yazi.send(f"{PASSWORD}\r")
+    screen = yazi.wait_for("Stored size")
+    assert "Snapshots" in screen and "Count:" in screen
+    assert "Hosts:" in screen
+    assert "Compression:" in screen
+    assert "Location:" in screen and "/repo" in screen
+
+
+def test_tab_on_a_restic_file_reports_a_wrong_password(yazi):
+    yazi.send("j")
+    yazi.send("\t")
+    yazi.wait_for("Repository password")
+    yazi.send("nope\r")
+    yazi.wait_for("wrong password")
+
+
+def test_tab_on_a_restic_file_survives_a_cancelled_password_prompt(yazi):
+    yazi.send("j")
+    yazi.send("\t")
+    yazi.wait_for("Repository password")
+    yazi.send("\x1b", settle=0.5)  # Esc leaves insert mode...
+    yazi.send("\x1b", settle=0.5)  # ...and a second Esc cancels the input
+    yazi.wait_for("Password not entered")
+
+
+def test_tab_on_the_open_repository_does_not_ask_again(repo_open, workspace):
+    goto(repo_open, workspace.resolve())
+    repo_open.wait_for("repository = ./repo")  # the cursor is back on demo.restic: its text is previewed
+    repo_open.send("\t")
+    screen = repo_open.wait_for("Stored size")
+    assert "Repository password" not in screen
+
+
+def test_tab_on_the_ghost_root_shows_the_repository_statistics(repo_open):
+    repo_open.send("h")  # the cursor lands on the session root, in the per-user folder
+    repo_open.send("\t")
+    assert "Location:" in repo_open.wait_for("Stored size")

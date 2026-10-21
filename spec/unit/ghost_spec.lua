@@ -97,6 +97,16 @@ describe("ghost path mapping", function()
     assert.equals("/", ghost.locate(ROOT, ROOT .. "/latest", SNAP_DIR).path)
   end)
 
+  it("spells paths through latest via the real snapshot directory (one key per file)", function()
+    local real = ROOT .. "/" .. SNAP_DIR
+    assert.equals(real, ghost.canonical(ROOT, ROOT .. "/latest", SNAP_DIR))
+    assert.equals(real .. "/home/me", ghost.canonical(ROOT, ROOT .. "/latest/home/me", SNAP_DIR))
+    assert.equals(real .. "/home/me", ghost.canonical(ROOT, real .. "/home/me", SNAP_DIR))
+    assert.equals(ROOT .. "/latest2/x", ghost.canonical(ROOT, ROOT .. "/latest2/x", SNAP_DIR)) -- look-alike
+    assert.equals(ROOT .. "/latest/x", ghost.canonical(ROOT, ROOT .. "/latest/x", nil)) -- no snapshots
+    assert.equals("/home/me", ghost.canonical(ROOT, "/home/me", SNAP_DIR))
+  end)
+
   it("creates unique staging directories below the root", function()
     local a, b = ghost.staging_for(ROOT, ROOT .. "/x"), ghost.staging_for(ROOT, ROOT .. "/x")
     assert.not_equals(a, b)
@@ -114,7 +124,7 @@ describe("ghost.safe_name", function()
   it("accepts ordinary names and rejects dangerous ones", function()
     assert.is_true(ghost.safe_name("report.md"))
     assert.is_true(ghost.safe_name("..hidden"))
-    for _, bad in ipairs { "", ".", "..", "a/b", "a\\b", ghost.MARKER, "nul\0byte" } do
+    for _, bad in ipairs { "", ".", "..", "a/b", "a\\b", ghost.MARKER, ghost.LEGACY_MARKER, "nul\0byte" } do
       assert.is_false(ghost.safe_name(bad), bad)
     end
   end)
@@ -252,6 +262,15 @@ describe("ghost tree", function()
       assert.is_false(localfs.fs.exists(dir .. "/data/" .. ghost.MARKER))
       assert.equals(6, entries[dir .. "/data/a.txt"].size)
       assert.equals(7, require("lfs").attributes(dir .. "/data/a.txt").size) -- still not truncated
+    end)
+
+    it("removes the hidden markers left by older versions", function()
+      for _, folder in ipairs { dir, dir .. "/data" } do
+        io.open(folder .. "/" .. ghost.LEGACY_MARKER, "w"):close()
+      end
+      assert(ghost.init_root(root, snapshots, localfs.fs))
+      assert.same({ ghost.MARKER, "a.txt", "docs", "link" }, localfs.list(dir .. "/data"))
+      assert.is_false(localfs.fs.exists(dir .. "/" .. ghost.LEGACY_MARKER))
     end)
 
     it("drops snapshots that no longer exist and adds the new ones", function()
