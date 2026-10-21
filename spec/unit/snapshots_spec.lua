@@ -16,6 +16,21 @@ local function snap(overrides)
   return record
 end
 
+describe("snapshots.short_id / snapshots.index", function()
+  it("uses restic's short id, or the first 8 characters of the id (older restic)", function()
+    assert.equals("e3e4a9ff", snapshots.short_id(snap()))
+    assert.equals("e3e4a9ff", snapshots.short_id(snap { short_id = false }))
+  end)
+
+  it("keys snapshots by short id", function()
+    local other = snap { id = "0badcafe" .. string.rep("0", 56), short_id = false }
+    local by_id = snapshots.index { snap(), other }
+    assert.equals("my host", by_id.e3e4a9ff.hostname)
+    assert.equals(other, by_id["0badcafe"])
+    assert.same({}, snapshots.index {})
+  end)
+end)
+
 describe("snapshots.dirname", function()
   it(
     "follows <timestamp>__<short_id>__<hostname>__[<tags>]",

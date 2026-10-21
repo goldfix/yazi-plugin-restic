@@ -44,7 +44,8 @@ read from the backup (not from the 0-byte file).
    ssh's own message (`subprocess ssh: …` lines) plus a hint. `ssh_batch_mode = no` in the `.restic` file disables it.
 8. **Privacy/safety of the ghost tree:** per-user dir `/tmp/yazi-restic-<uid>` must be a real dir owned by the user
    (checked, refuse otherwise — /tmp squatting), then `chmod 700`; root `chmod 700`. Backup names that are empty,
-   `.`, `..`, contain `/`, `\`, NUL or equal `.unfetched` are skipped; backup symlinks become empty regular files.
+   `.`, `..`, contain `/`, `\`, NUL or equal a marker (`ghost.is_marker`: `(not listed yet)`, or the legacy `.unfetched` of
+   ≤ 0.5.0, still reserved so that `reflag` can delete old markers of a reused tree safely) are skipped; backup symlinks become empty regular files.
 9. Code must be **clean, minimal (DRY) and documented** (LuaLS annotations `---@param/---@return`, short module header).
    Pure logic (parsing, naming, path mapping, record filtering) lives in side-effect-free functions; I/O is injected
    or isolated in thin wrappers so that everything is unit-testable without Yazi.
@@ -73,6 +74,13 @@ Other facts: `Command`/`fs.*` are async-context only; `Command` cannot redirect 
 `child:read`, which is slow in 26.9.1: avoid, use `restore`); `io`/`os` std libs are available; `ps.sub("cd")` runs in sync context;
 `ya.sync` blocks give access to `cx` and plugin `state`; previewers are plugins exposing `peek`/`seek`
 (`ya.preview_widget(job, widget)`); spotters expose `spot`.
+Spotter facts (NOT in the 26.9.1 docs; read from the nightly source and proven by the e2e tests): `prepend_spotters` rules
+use the same `url`/`mime` selectors as previewers, and **a `url` pattern ending in `/` matches directories only, one
+without it files only** (so ghost files and folders need two rules); `spot(job)` runs async like `peek`
+(`job.file`, `job.mime`, `job.skip`, `job.id`) and draws with `ya.spot_table(job, ui.Table(rows):area(ui.Pos{…})…)`,
+which may be called again with the same `job` to refresh (progressive results); `ui.Row({a, {l1, l2}}):height(2)` makes a
+multi-line cell (Yazi also measures cell heights itself; the explicit height is harmless); `ya.input` works inside `spot`; when the user moves on Yazi aborts the Lua with the error
+"Spot task cancelled" (`guarded` swallows it); `Tab`/`Esc` close the spot, `h`/`l` swipe to the neighbours (re-run `spot`).
 
 Restic facts: `ls <snap> <dir> --json` (no `-R`) → JSONL: one `snapshot` record, then the dir itself, then its
 direct children (`name,type,path,size,mode,permissions,mtime,…`). Paths are as printed by `ls` (e.g. `/data/a.txt`).
@@ -86,7 +94,7 @@ backed-up permissions; restore exits 0 when the include matches nothing. Empty `
 ## 4. Architecture
 
 ```
-.restic file ──(smart-enter key)──> main.lua  (dispatch: enter | restore | version | peek | setup)
+.restic file ──(smart-enter key)──> main.lua  (dispatch: enter | leave | back | restore | version | peek | spot | setup)
                                        │
         ┌──────────────┬───────────────┼───────────────┬─────────────────┐
      config.lua    client.lua     snapshots.lua     ghost.lua        restore.lua
@@ -100,16 +108,22 @@ backed-up permissions; restore exits 0 when the include matches nothing. Empty `
 Flow:
 1. **Open** (`<Enter>` on `*.restic`): parse config → resolve binary → ask password → `snapshots --json` →
    create the session root `/tmp/yazi-restic-<uid>/<repo_id>/` (per-user dir, mode 700; Windows: `%TEMP%\yazi-restic\<repo_id>`) with one dir per snapshot
-   (`<local-time timestamp>__<short_id>__<hostname>__[<tags>]`, each holding `.unfetched`) + relative `latest` symlink → `cd`.
+   (`<local-time timestamp>__<short_id>__<hostname>__[<tags>]`, each holding the marker) + relative `latest` symlink → `cd`.
+   `session.file` remembers the `.restic` file: `plugin restic -- back` (`ya.emit("reveal", { file, raw = true,
+   no_dummy = true })`) returns to it from anywhere, and `leave` does so when the cwd is the session root (else it
+   emits Yazi's own `leave`); both are optional keymap entries.
    Yazi keeps the logical path when entering `latest`, so `ghost.locate(root, path, latest)` resolves the alias
-   (session field `latest`); every caller must pass it.
+   (session field `latest`); every caller must pass it. The in-memory tables (`state.entries`, `state.busy`) are keyed
+   by `ghost.canonical` (the `latest/…` spelling rewritten to `<snapshot dir>/…`, done by `key()` inside the sync
+   accessors), so both spellings share metadata and busy flags.
    **An existing root is reused**, not wiped: snapshots are immutable, so folders and fetched files stay valid;
-   vanished snapshots are removed, new ones added, every folder is re-flagged `.unfetched` (metadata lives in
+   vanished snapshots are removed, new ones added, every folder is re-flagged with the marker (metadata lives in
    memory only, so each folder is listed again once per session) and `<root>/.staging` is wiped.
 2. **Expand** (`ps.sub("cd")` → `ya.async`; `ps.sub("hover")` → after 0.4 s on the same entry, so the preview pane
-   shows a hovered folder's content): if the folder is inside the session and contains `.unfetched`:
-   `ls <snap> <path> --json`, keep direct children, create dirs (+`.unfetched`) and 0-byte files, store each node's
-   metadata in the plugin `state` (memory only), remove `.unfetched`; finally `peek --force` if the hovered entry
+   shows a hovered folder's content): if the folder is inside the session and contains the marker `ghost.MARKER` = `(not listed yet)` (VISIBLE on purpose: a hidden
+   dot file made loading folders look empty, "No items"):
+   `ls <snap> <path> --json`, keep direct children, create dirs (+marker) and 0-byte files, store each node's
+   metadata in the plugin `state` (memory only), remove the marker; finally `peek --force` if the hovered entry
    was just listed (it may have been previewed before its metadata arrived).
 3. **Preview** (previewer on ghost paths): show metadata of the hovered entry from the in-memory cache.
 4. **Open file** (`<Enter>` on a 0-byte ghost file): `Client:fetch` = `restic restore <id>:<dir> --include /<name>`
@@ -120,10 +134,17 @@ Flow:
    if the folder of a reused tree is not listed yet, `enter` lists it first.
    `restore` is ~5x faster than streaming `dump` through Lua (256 MB: 0.8 s vs 4.6 s). Files with size > 0 are
    already cached and just opened.
-5. **Restore** (`plugin restic -- restore`): `ya.input` for the destination (`restore.destination`: `~` expanded,
+5. **Spot** (`Tab`, `M:spot`): ghost entry → `info.node` (+ `ensure_listed` and `info.tally` for folders, counted inside a
+   sync block); snapshot dir / `latest` → `info.snapshot` from `state.snapshots` (kept at open, keyed by short id);
+   ghost root or `*.restic` outside the ghost tree → `info.repository`: `snapshots --json` then `stats --mode raw-data`
+   (reads each distinct tree once, never file contents; `restore-size` revisits every entry of every snapshot and is
+   NOT used), drawn progressively; `Command` children are `kill_on_drop`, so closing the spot kills restic. A `.restic` file reuses the
+   open session's password when `session.repository` matches, otherwise asks (`ya.input`) and does not keep it.
+   With a selection Yazi passes mime `multi/unknown`, but our url rules still win: we describe the hovered entry.
+6. **Restore** (`plugin restic -- restore`): `ya.input` for the destination (`restore.destination`: `~` expanded,
    must be absolute and outside the ghost tree). `restore.plan` turns the selection (or the hovered entry; note
    `cx.active.selected` yields `File`s: `.url`) into one group per snapshot (duplicates, entries below another selected
-   entry and non-backup paths such as `.unfetched` dropped; the skipped ones are counted and reported), then ONE
+   entry and non-backup paths such as the marker dropped; the skipped ones are counted and reported), then ONE
    `restore <snap> --target <dest> --include <p1> --include <p2>…` per snapshot (`Client:restore(id, includes, dest)`;
    a `/` include = whole snapshot). Progress notification per group, summary with elapsed time; on success the
    selection is cleared (`ya.emit("escape", { select = true })`), on failure it is kept.
@@ -132,13 +153,14 @@ Flow:
 
 ```
 restic.yazi/          the plugin (symlink/copy into ~/.config/yazi/plugins/)
-  main.lua            entry point only: dispatch, no business logic
+  main.lua            entry point only: dispatch (+ `spot` for the Tab spotter), no business logic
   config.lua          .restic parser, binary resolution + min version, paths (~, absolute), repo id
   client.lua          restic CLI wrapper (env, sftp BatchMode, JSON/JSONL, errors, fetch, restore)
   snapshots.lua       snapshot dir naming (local time) / parsing / ordering by real instant (`epoch`)
   ghost.lua           ghost tree create/reuse/expand, path mapping (+ `latest` alias), staging, per-user dir
   restore.lua         restore planning (ghost paths -> per-snapshot groups), progress texts, destination validation
   preview.lua         rows of the metadata preview (pure)
+  info.lua            sections of the `Tab` spotter: entry / snapshot / repository (pure)
   util.lua            small pure helpers
   version.lua         `return { version = "X.Y.Z" }`: last released version, single source of truth (bumped by the release skill)
   README.md, LICENSE  git SYMLINKS to `../README.md` / `../LICENSE` (single copies live in the root). `ya pkg`
@@ -166,7 +188,7 @@ tmp/                  scratch space for experiments (gitignored)
 source lua_env.sh init      # one-off: build the local Lua toolchain into ./.lua
 source lua_env.sh active    # per shell: put ./.lua/bin on PATH
 busted                      # unit (spec/) + integration (tests/integration/) tests, config in .busted
-uv run --no-sync pytest tests/e2e   # end-to-end tests against the installed yazi/restic (~2 min: run in background)
+uv run --no-sync pytest tests/e2e   # end-to-end tests against the installed yazi/restic (~4 min: run in background)
 uv run --no-sync pytest tests/tooling   # release tooling tests (fast)
 python3 .agents/skills/plugin-release/scripts/release.py check    # lint + busted + ruff + tooling tests (--e2e adds the e2e)
 python3 .agents/skills/plugin-release/scripts/release.py build    # gates + installable build in dist/ (see the skill)
@@ -189,6 +211,21 @@ run = "plugin restic -- restore"
 desc = "Restore selected file/folder from the restic backup"
 
 [[mgr.prepend_keymap]]
+on  = "h"
+run = "plugin restic -- leave"       # from the top of the ghost tree → the .restic file; elsewhere Yazi's leave
+desc = "Leave (restic aware)"
+
+[[mgr.prepend_keymap]]
+on  = "<Left>"                       # same action for the arrow key (`on = [ "h", "<Left>" ]` would be a key SEQUENCE)
+run = "plugin restic -- leave"
+desc = "Leave (restic aware)"
+
+[[mgr.prepend_keymap]]
+on  = [ "r", "b" ]
+run = "plugin restic -- back"        # jump to the .restic file of the open repository
+desc = "Back to the .restic file"
+
+[[mgr.prepend_keymap]]
 on  = [ "r", "v" ]
 run = "plugin restic -- version"     # notifies the installed plugin version (dev builds: <version>-dev.<sha>[.dirty])
 desc = "Show the restic.yazi version"
@@ -197,6 +234,11 @@ desc = "Show the restic.yazi version"
 # yazi.toml
 [plugin]
 prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
+prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "directories only": files and folders need their own rule
+  { url = "/tmp/yazi-restic-*/**",  run = "restic" },
+  { url = "/tmp/yazi-restic-*/**/", run = "restic" },
+  { url = "*.restic",               run = "restic" },
+]
 ```
 (`init.lua`: `require("restic"):setup()` registers the `cd`/`hover` hooks. The plugin dir must be reachable as
 `~/.config/yazi/plugins/restic.yazi`; the e2e tests symlink `restic.yazi/` there.)
@@ -209,12 +251,16 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 | Credentials           | select the repository                        | masked password prompt                                     |
 | Reopen                | open the same repo twice                     | tree reused: fetched files still cached, metadata listed again |
 | Ghost root            | correct password                             | per-user session root created, snapshot dirs listed, Yazi `cd`s in |
-| On-demand expansion   | enter a folder holding `.unfetched`          | children appear at once, `.unfetched` disappears           |
+| On-demand expansion   | enter a folder holding the marker            | children appear at once, the marker disappears; while loading it shows `(not listed yet)`, not "No items" |
 | Metadata preview      | hover a ghost entry                          | type/size/dates/perms from the backup are shown            |
+| Spot a file/folder    | `Tab` on a ghost file / folder               | table with the entry's details (+ contents for a folder)   |
+| Spot a snapshot       | `Tab` on a snapshot dir or `latest`          | snapshot record + backup run (ID, host, paths, tags, files…) |
+| Spot a repository     | `Tab` on a `.restic` file / the ghost root   | snapshots, hosts, stored size, compression; password reused if that repo is open, else asked |
 | Fetch on demand       | `<Enter>` on a 0-byte file                   | file is restored locally, then opened                      |
 | Restore               | restore a complex folder                     | whole folder written to the chosen destination             |
 | Multi-restore         | select several entries with Space, `r e`     | all restored with one restic call per snapshot, selection cleared |
 | Local-time names      | run Yazi with another `TZ`                   | snapshot folder names show that zone's local time          |
+| Leave the backup      | `leave` at the top of the tree / `back` anywhere | back in the folder of the `.restic` file, file highlighted |
 | Installed version     | `plugin restic -- version`                   | notification with the build label (`0.1.0` or `0.1.0-dev.…`) |
 | Browse via `latest`   | enter `latest` and navigate                  | same behaviour as the snapshot directory                   |
 | Wrong password        | wrong password                               | error notification, no session created                     |
@@ -223,6 +269,9 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 
 ## 9. Working rules (learned the hard way)
 
+- **Backends tested**: local and sftp (automated: sftp through a fake `ssh` that execs the local `sftp-server`); S3 and
+  S3-compatible buckets by hand (user, OK). Untried: REST, B2, Azure, Google Cloud, rclone, real sftp server, Linux,
+  Windows. Say so in docs; do not claim more.
 - **Delivery** (verified, details in MEMORY.md "Yazi delivery system"): two routes. `ya pkg add
   goldfix/yazi-plugin-restic:restic` (GitHub-only, default branch, needs the repo public; works thanks to the
   `restic.yazi/README.md|LICENSE` git symlinks) and `dist/…/install.sh` (hand-made/offline/internal; does NOT register
@@ -237,9 +286,12 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 - **Anything Yazi-facing needs an e2e test**: Lua unit tests passed while Yazi refused to start (module returning a
   string), while a `ya.sync` accessor dropped a field, and while selection restore read `cx.active.selected` wrongly
   (it yields `File` objects: use `.url`). Prove new tests can fail (revert the fix once).
+- **e2e timeouts**: `tests/e2e/driver.py` `TIMEOUT = 10` s for every wait (user decision after trying 5 s; measured over a
+  full run: a restic call through Yazi takes ≤ 1.5 s, the slowest ordinary wait 3 s); the deliberately slow tests pass an
+  explicit longer one. Re-measure before lowering it again: the suite's ~4 min are mostly the 0.3 s `settle` of each `send`, not the waits (76 s in total).
 - **e2e alone**: run the e2e suite without other heavy jobs in parallel; on macOS a killed `yazi` can hang in exit until
   the pty is drained (`driver.close()` pumps it; a stalled run usually shows a `(yazi)` zombie).
-- **Long commands** (`pytest tests/e2e` ≈2 min, `release.py build --e2e` ≈3 min): run them in the background with a
+- **Long commands** (`pytest tests/e2e` ≈4 min, `release.py build --e2e` ≈5 min): run them in the background with a
   log file or give an explicit timeout; a long foreground call gets aborted.
 - After every work block update `MEMORY.md` (status, decisions, session log), this file (facts/layout) and run the
   markdown fence check of the `memory-updater` skill.

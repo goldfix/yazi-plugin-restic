@@ -18,6 +18,25 @@ describe("client (real restic)", function()
     assert.is_string(snaps[1].hostname)
   end)
 
+  it("reports the repository statistics", function()
+    local stats = assert(client:stats())
+    assert.is_true(stats.total_size > 0)
+    assert.is_true(stats.total_blob_count > 0)
+    assert.equals(2, stats.snapshots_count)
+  end)
+
+  it("reports the restore size when asked", function()
+    local stats = assert(client:stats("restore-size"))
+    assert.is_true(stats.total_file_count > 0)
+  end)
+
+  it("reports a wrong password for the statistics too", function()
+    local bad = Client.new { exec = "restic", repository = fixture.repo, password = "nope" }
+    local stats, err = bad:stats()
+    assert.is_nil(stats)
+    assert.equals("wrong password", err)
+  end)
+
   it("reports a wrong password", function()
     local bad = Client.new { exec = "restic", repository = fixture.repo, password = "nope" }
     local snaps, err = bad:snapshots()

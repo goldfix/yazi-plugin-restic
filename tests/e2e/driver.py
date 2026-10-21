@@ -14,6 +14,10 @@ import pyte
 
 ROWS, COLS = 30, 120
 
+# Longest ordinary wait of the whole suite is ~1.5 s (a restic call through Yazi), 3 s for the deliberately slow ones.
+# It was lowered to 5 s and then raised again to 10 s (user decision): more room on a busy machine, slower failures.
+TIMEOUT = 10
+
 
 class _Screen(pyte.Screen):
     """pyte rejects a few private CSI reports that Yazi emits at startup; ignore them."""
@@ -38,7 +42,7 @@ class YaziDriver:
         if self.pid == 0:
             os.execvpe("yazi", ["yazi", str(cwd)], env)
         fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", ROWS, COLS, 0, 0))
-        self.wait_for("", timeout=5)
+        self.wait_for("", timeout=TIMEOUT)
 
     def _pump(self, seconds: float) -> None:
         end = time.monotonic() + seconds
@@ -61,7 +65,7 @@ class YaziDriver:
         os.write(self.fd, keys.encode())
         self._pump(settle)
 
-    def wait_for(self, needle: str, timeout: float = 10) -> str:
+    def wait_for(self, needle: str, timeout: float = TIMEOUT) -> str:
         """Pump until `needle` is on screen; raise with the screen content otherwise."""
         end = time.monotonic() + timeout
         while True:
@@ -71,7 +75,17 @@ class YaziDriver:
             if time.monotonic() > end:
                 raise AssertionError(f"{needle!r} not on screen after {timeout}s:\n{self.text}")
 
-    def wait_cwd(self, suffix: str, timeout: float = 10) -> str:
+    def wait_gone(self, needle: str, timeout: float = TIMEOUT) -> str:
+        """Pump until `needle` is no longer on screen; raise with the screen content otherwise."""
+        end = time.monotonic() + timeout
+        while True:
+            self._pump(0.1)
+            if needle not in self.text:
+                return self.text
+            if time.monotonic() > end:
+                raise AssertionError(f"{needle!r} still on screen after {timeout}s:\n{self.text}")
+
+    def wait_cwd(self, suffix: str, timeout: float = TIMEOUT) -> str:
         """Pump until the header line (current directory) ends with `suffix`."""
         end = time.monotonic() + timeout
         while True:

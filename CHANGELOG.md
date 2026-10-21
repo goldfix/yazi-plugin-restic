@@ -6,6 +6,27 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
+### Added
+- `Tab` (Yazi's spotter) shows details from the backup: for a file or folder the preview plus, for a folder, what it
+  contains; for a snapshot (or `latest`) its record and backup run; for the session root or a `.restic` file the
+  repository statistics (snapshots, hosts, stored size, compression). Needs the new `prepend_spotters` rules in
+  `yazi.toml` (see the README); `.restic` files reuse the open repository's password or ask for it.
+- `plugin restic -- leave` (bind it to `h` and `<Left>`): from the top of a browsing tree it returns to the `.restic` file the
+  repository was opened from, highlighted; elsewhere it is Yazi's `leave`. `plugin restic -- back` jumps there from
+  anywhere.
+
+### Changed
+- A folder that is still being read from the backup now shows a visible `(not listed yet)` file (it used to be a
+  hidden `.unfetched` one, so Yazi said "No items"). Reopening a repository browsed with an earlier version removes
+  the old hidden markers; `.unfetched` stays a reserved name (a backed-up file with that name is not shown).
+
+### Fixed
+- A folder listed through its snapshot folder and then reached through `latest` (or the other way round) showed
+  "No backup information available", and `Enter` on one of its files opened the empty placeholder instead of
+  fetching the file.
+
 ## [0.5.0] - 2026-10-21
 
 ### Added
