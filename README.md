@@ -22,8 +22,8 @@ What you get:
 
 The password is asked once per session and lives only in memory.
 
-> **Status:** works end to end and is covered by unit, integration and real-Yazi end-to-end tests. No release is
-> published yet; see [Open points](#open-points-and-ideas) for what is still missing.
+> **Status:** works end to end and is covered by unit, integration and real-Yazi end-to-end tests. See
+> [Open points](#open-points-and-ideas) for the known gaps.
 
 ---
 
@@ -559,39 +559,7 @@ More: [AGENTS.md](https://github.com/goldfix/yazi-plugin-restic/blob/main/AGENTS
 
 ## Open points and ideas
 
-Legend: `[x]` done, `[ ]` open.
-
-**Done**
-
-- [x] Lazy browsing of snapshots with a ghost filesystem (no FUSE), including the `latest` alias
-- [x] Backup metadata in the preview pane
-- [x] Fetch-and-open on `Enter`; restore of single or multiple entries (one restic call per snapshot, progress, selection cleared)
-- [x] Snapshot folders named in your local time, `latest` chosen by the real instant (hosts in different time zones)
-- [x] Password in memory only; hardened temp folder; safe handling of odd names and symlinks
-- [x] SFTP without prompts inside the TUI (`ssh_batch_mode`)
-- [x] Reuse of the browsing tree when reopening a repository
-- [x] Build, versioning and install procedure; annotated sample configuration
-
-**Next**
-
-- [ ] **Try the first build on real repositories** (SFTP to a real server, REST, S3…) and cut release `0.1.0`
-- [ ] **Preview the content of files already fetched** (text, images…) instead of only their metadata
-- [ ] **Confirm before a restore overwrites existing files**; finer progress for long restores (today per snapshot, not per file)
-- [ ] **Configurable default restore folder** (`require("restic"):setup { restore_dir = "…" }`)
-- [ ] **Mark fetched files** in the listing (e.g. a custom linemode that also shows the real size of placeholders)
-- [ ] **Publish the repository and releases**: `ya pkg add` only works once the repository is public on GitHub; attach the
-      `.tar.gz` and its checksum to each GitHub release
-
-**Maybe**
-
-- [ ] Yazi spotter (`Tab`) with the full metadata table
-- [ ] More than one repository open at the same time
-- [ ] Explicit "close repository" / cleanup of fetched files (today the OS clears `/tmp`)
-- [ ] Search inside a snapshot (`restic find`) and compare two snapshots (`restic diff`)
-- [ ] Other password sources (system keychain, a password manager command)
-- [ ] Continuous integration (GitHub Actions: lint, tests, build on Linux and macOS)
-
-**Known gaps**
+Known gaps of the current version. The roadmap lives in the project notes, not here.
 
 - [ ] Windows is untested (temp folder, `chmod`, path syntax); Linux is untested too, though nothing in the code is
       macOS-specific

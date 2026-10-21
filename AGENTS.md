@@ -1,7 +1,7 @@
 # AGENTS.md — Instructions for AI agents
 
 Read `MEMORY.md` first (living diary: status, decisions, next steps). Keep **this file** for directives and
-vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README: overview, TL;DR, configuration, internals, build notes, todo list) is end-user
+vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README: overview, TL;DR, configuration, internals, build notes, known gaps) is end-user
 documentation: keep it in sync with user-visible changes (the build copies it, like `LICENSE`, into the package's plugin
 folder, so its links must be absolute URLs). User-visible changes also go under `## [Unreleased]` in `CHANGELOG.md`;
 `sample_backup.restic` must follow any change to the `.restic` format.
