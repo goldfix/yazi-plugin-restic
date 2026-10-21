@@ -352,8 +352,9 @@ REST, S3, B2, Azure, Google Cloud and rclone repositories get their credentials 
 restic reads from the environment Yazi was started with (for example `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for
 S3, `B2_ACCOUNT_ID` and `B2_ACCOUNT_KEY` for B2, `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD` for a REST server).
 See [restic's documentation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html) for the variables
-of each backend. Do not put secrets in the `.restic` file. (These backends have not been tried by the author yet; only
-local and SFTP-over-local-`sftp-server` repositories are covered by the automated tests.)
+of each backend. Do not put secrets in the `.restic` file. (Amazon S3 and S3-compatible buckets have been tried by hand
+and work. REST, B2, Azure, Google Cloud and rclone have not been tried; the automated tests cover only local and
+SFTP-over-local-`sftp-server` repositories.)
 
 ### Where things go
 
@@ -568,7 +569,8 @@ Known gaps of the current version. The roadmap lives in the project notes, not h
       (a full-id map would fix it)
 - [ ] Two Yazi instances of the same user opening the same repository share one browsing tree; the second open clears
       the first one's in-flight downloads
-- [ ] Backends other than local and SFTP are not covered by automated tests
+- [ ] Backends other than local and SFTP are not covered by automated tests (S3 and S3-compatible were tried by hand
+      and work; REST, B2, Azure, Google Cloud and rclone are untried)
 
 ---
 

@@ -223,6 +223,9 @@ prepend_previewers = [ { url = "/tmp/yazi-restic-*/**", run = "restic" } ]
 
 ## 9. Working rules (learned the hard way)
 
+- **Backends tested**: local and sftp (automated: sftp through a fake `ssh` that execs the local `sftp-server`); S3 and
+  S3-compatible buckets by hand (user, OK). Untried: REST, B2, Azure, Google Cloud, rclone, real sftp server, Linux,
+  Windows. Say so in docs; do not claim more.
 - **Delivery** (verified, details in MEMORY.md "Yazi delivery system"): two routes. `ya pkg add
   goldfix/yazi-plugin-restic:restic` (GitHub-only, default branch, needs the repo public; works thanks to the
   `restic.yazi/README.md|LICENSE` git symlinks) and `dist/…/install.sh` (hand-made/offline/internal; does NOT register
