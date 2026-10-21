@@ -575,7 +575,8 @@ This `README.md` and the root `LICENSE` are the **only** copies in the repositor
 inside the plugin folder, so `restic.yazi/README.md` and `restic.yazi/LICENSE` are committed **git symlinks** to
 `../README.md` and `../LICENSE`: `ya pkg add` replaces them with copies of their targets, and the build does the same
 for the package. Links in the README must therefore be absolute URLs. The build checks the symlinks (and
-`tests/tooling/test_ya_pkg.py` runs the real `ya pkg add` against a local stand-in for GitHub).
+`tests/tooling/test_ya_pkg.py` runs the real `ya pkg add` against a local stand-in for GitHub; installing from GitHub with
+`ya pkg add`, `r` `v` and removing it again were also tried by hand and work).
 
 ```sh
 source lua_env.sh init          # one-off: builds a local Lua 5.5 toolchain (busted, luacheck, stylua) in ./.lua
