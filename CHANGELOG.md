@@ -6,6 +6,8 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-21
+
 ### Added
 - `Tab` (Yazi's spotter) shows details from the backup: for a file or folder the preview plus, for a folder, what it
   contains; for a snapshot (or `latest`) its record and backup run; for the session root or a `.restic` file the
