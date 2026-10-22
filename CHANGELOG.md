@@ -6,8 +6,6 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
-## [0.7.1] - 2026-10-22
-
 ### Changed
 - The suggested keys for the plugin actions moved from the `r` prefix to **`b`** ("backup"): `b r` restore, `b b` back,
   `b v` version. `r` alone is Yazi's *rename*, which the old `r e` / `r b` / `r v` suggestion turned into a prefix
