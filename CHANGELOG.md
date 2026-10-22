@@ -6,6 +6,20 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-22
+
+No code change since 0.7.0: a documentation-only release (README and AGENTS fixes).
+
+### Fixed
+- README: the `ya pkg` pin example named a tag that does not exist (`v0.1.0`); the quick-start keymap lacked the `back`
+  key (`b b`); the feature list claimed every restic backend works, while only local, SFTP, REST and S3 were tried.
+
+## [0.7.1] - 2026-10-22
+
+No code change since 0.7.0: a documentation-only release (README fixes).
+
+## [0.7.0] - 2026-10-22
+
 ### Changed
 - The suggested keys for the plugin actions moved from the `r` prefix to **`b`** ("backup"): `b r` restore, `b b` back,
   `b v` version. `r` alone is Yazi's *rename*, which the old `r e` / `r b` / `r v` suggestion turned into a prefix
