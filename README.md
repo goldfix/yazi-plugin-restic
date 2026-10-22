@@ -19,8 +19,8 @@ What you get:
 - **Open a file straight from the backup.** Press `Enter` and the file is fetched and opened with your usual program.
 - **Restore** one or many files and folders to any directory.
 - **No FUSE, nothing mounted**, no daemon, nothing to clean up by hand.
-- Works with every repository location restic supports: local disks, SFTP, REST server, S3, B2, Azure, Google
-  Cloud, rclone…
+- Works with restic's repository locations: local disks, SFTP, REST server and S3 (or S3-compatible) are tried;
+  B2, Azure, Google Cloud, rclone… are handled by restic itself and should work the same, but are untried.
 
 The password is asked once per session and lives only in memory.
 
@@ -91,6 +91,10 @@ run = "plugin restic -- leave"      # like "up one level"; from the top of a bac
 [[mgr.prepend_keymap]]
 on  = "h"
 run = "plugin restic -- leave"      # the same for the vim key (two entries: a list in `on` would be a key sequence)
+
+[[mgr.prepend_keymap]]
+on  = [ "b", "b" ]
+run = "plugin restic -- back"       # jump to the .restic file of the open repository, from anywhere
 
 [[mgr.prepend_keymap]]
 on  = [ "b", "r" ]
@@ -165,7 +169,7 @@ ya pkg delete goldfix/yazi-plugin-restic:restic
 Things worth knowing:
 
 - `ya pkg` follows the **default branch**, never tags or releases. To stay on a release, edit `package.toml` and put
-  an `=` before the reference — `rev = "=v0.1.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
+  an `=` before the reference — `rev = "=v0.7.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
   pinned packages.
 - The version shown by `b` `v` is the last *released* version written in the plugin; the exact commit you run is the
   `rev` in `package.toml`.

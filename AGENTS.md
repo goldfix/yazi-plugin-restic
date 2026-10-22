@@ -261,7 +261,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
 | Multi-restore         | select several entries with Space, `b r`     | all restored with one restic call per snapshot, selection cleared |
 | Local-time names      | run Yazi with another `TZ`                   | snapshot folder names show that zone's local time          |
 | Leave the backup      | `leave` at the top of the tree / `back` anywhere | back in the folder of the `.restic` file, file highlighted |
-| Installed version     | `plugin restic -- version`                   | notification with the build label (`0.1.0` or `0.1.0-dev.…`) |
+| Installed version     | `plugin restic -- version`                   | notification with the build label (`X.Y.Z` or `X.Y.Z-dev.…`) |
 | Browse via `latest`   | enter `latest` and navigate                  | same behaviour as the snapshot directory                   |
 | Wrong password        | wrong password                               | error notification, no session created                     |
 | sftp without agent    | sftp repo needing a passphrase / new host key | immediate error with ssh's message and a hint, no prompt   |
@@ -278,7 +278,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   in `package.toml`, so `ya pkg list` never shows it; warns if `ya pkg` already manages the plugin). Never mix them on
   one machine: `ya pkg` hash-checks the deployed folder.
 
-- **Release state**: last release `v0.6.0`; `v0.7.0` (minor: `b` key prefix, docs) is being prepared, see MEMORY.md "Next steps".
+- **Release state**: last release `v0.7.0` (`b` key prefix, REST verified); next work: MEMORY.md "Next steps".
 - **Ask before** committing, tagging/releasing (`release.py release`) or pushing; never push. Releases need the user's
   go-ahead on the bump level. `MEMORY.md` is git-ignored by the inherited `.gitignore`: ask before changing that.
 - **Scripted edits must assert**: when patching files from Python, `assert text.count(old) == 1` before `replace` (a
