@@ -1,9 +1,11 @@
 # AGENTS.md — Instructions for AI agents
 
 Read `MEMORY.md` first (living diary: status, decisions, next steps). Keep **this file** for directives and
-vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README: overview, TL;DR, configuration, internals, build notes, known gaps) is end-user
-documentation: keep it in sync with user-visible changes (the build copies it, like `LICENSE`, into the package's plugin
-folder, so its links must be absolute URLs). User-visible changes also go under `## [Unreleased]` in `CHANGELOG.md`;
+vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README, kept SHORT on purpose: intro, TL;DR, configuration, `.restic` file, troubleshooting)
+is end-user documentation: keep it in sync with user-visible changes (the build copies it, like `LICENSE`, into the
+package's plugin folder, so its links must be absolute URLs). Everything else lives in `docs/` (not shipped, relative
+links allowed): `HOW_IT_WORKS.md` (ghost filesystem, flow, design decisions, privacy) and `DEVELOPMENT.md` (build,
+project structure, tests, releases, known limitations/open points). Do not grow the README again: add detail there. User-visible changes also go under `## [Unreleased]` in `CHANGELOG.md`;
 `sample_backup.restic` must follow any change to the `.restic` format.
 Everything (files, comments, commit messages) is written in **English**.
 
@@ -210,6 +212,7 @@ tests/tooling/        pytest for the release script (+ install.sh, release flow 
 tests/e2e/            pytest + pyte: a real Yazi in a pty, isolated YAZI_CONFIG_HOME, real restic repo
 .agents/skills/plugin-release/   build / version / release skill (scripts/release.py, assets/install.sh)
 dist/                 builds ready to install (gitignored): restic.yazi-<version>/, .tar.gz, .sha256, `latest` link
+docs/                 HOW_IT_WORKS.md + DEVELOPMENT.md (moved out of the README on 2026-10-22; no usage section any more)
 sample_backup.restic  annotated `.restic` template for users (shipped next to install.sh; every example is tested by `spec/unit/sample_spec.lua`: keep it in sync with `config.lua`)
 CHANGELOG.md          Keep a Changelog; `[Unreleased]` is moved to a version section by `release`
 source_app/yazi/      upstream yazi sources, REFERENCE ONLY (gitignored, never edit)
@@ -321,7 +324,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   in `package.toml`, so `ya pkg list` never shows it; warns if `ya pkg` already manages the plugin). Never mix them on
   one machine: `ya pkg` hash-checks the deployed folder.
 
-- **Release state**: last release `v0.8.0` (`b2476b0`: restore as a Yazi task + `cancel`/`b x`; HEAD `ba9cc89` = README fixes, docs-only; 0.7.1/0.7.2 were docs-only). Next work: MEMORY.md "Next steps".
+- **Release state**: last release `v0.8.0` (`b2476b0`: restore as a Yazi task + `cancel`/`b x`; HEAD `4ff72fb` = README slimmed + `docs/`, docs-only; 0.7.1/0.7.2 were docs-only). Next work: MEMORY.md "Next steps".
 - **Docs-only changes need no release**: `ya pkg` follows the default branch, so a README fix reaches users once merged;
   a release only changes the label shown by `b v`. `release.py` refuses an empty `[Unreleased]`, and re-adding bullets by
   hand to force it (as done for 0.7.1/0.7.2) leaves the CHANGELOG without those versions: write real notes instead.
@@ -339,10 +342,10 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   (it yields `File` objects: use `.url`). Prove new tests can fail (revert the fix once).
 - **e2e timeouts**: `tests/e2e/driver.py` `TIMEOUT = 10` s for every wait (user decision after trying 5 s; measured over a
   full run: a restic call through Yazi takes ≤ 1.5 s, the slowest ordinary wait 3 s); the deliberately slow tests pass an
-  explicit longer one. Re-measure before lowering it again: the suite's ~4 min are mostly the 0.3 s `settle` of each `send`, not the waits (76 s in total).
+  explicit longer one. Re-measure before lowering it again: the suite's ~5 min are mostly the 0.3 s `settle` of each `send`, not the waits (76 s in total).
 - **e2e alone**: run the e2e suite without other heavy jobs in parallel; on macOS a killed `yazi` can hang in exit until
   the pty is drained (`driver.close()` pumps it; a stalled run usually shows a `(yazi)` zombie).
-- **Long commands** (`pytest tests/e2e` ≈4 min, `release.py build --e2e` ≈5 min): run them in the background with a
+- **Long commands** (`pytest tests/e2e` ≈5 min, `release.py build --e2e` ≈5 min): run them in the background with a
   log file or give an explicit timeout; a long foreground call gets aborted.
-- After every work block update `MEMORY.md` (status, decisions, session log), this file (facts/layout) and run the
+- After every work block update `MEMORY.md` (status, decisions, condensed history), this file (facts/layout) and run the
   markdown fence check of the `memory-updater` skill.
