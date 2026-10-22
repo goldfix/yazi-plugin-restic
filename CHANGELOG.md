@@ -6,6 +6,8 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
 ### Added
 - A running restore can be stopped: the new `cancel` action (`plugin restic -- cancel`, suggested binding `b` `x`)
   kills the restic process (the selector is a flag in the plugin state, checked every 200 ms while restic works), so
