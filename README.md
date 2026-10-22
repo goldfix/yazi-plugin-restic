@@ -102,6 +102,10 @@ on  = [ "b", "r" ]
 run = "plugin restic -- restore"    # restore the selected (or hovered) entries
 
 [[mgr.prepend_keymap]]
+on  = [ "b", "x" ]
+run = "plugin restic -- cancel"     # stop the restore in progress
+
+[[mgr.prepend_keymap]]
 on  = [ "b", "v" ]
 run = "plugin restic -- version"    # show the installed version
 ```
@@ -171,7 +175,7 @@ ya pkg delete goldfix/yazi-plugin-restic:restic
 Things worth knowing:
 
 - `ya pkg` follows the **default branch**, never tags or releases. To stay on a release, edit `package.toml` and put
-  an `=` before the reference — `rev = "=v0.7.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
+  an `=` before the reference — `rev = "=v0.8.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
   pinned packages.
 - The version shown by `b` `v` is the last *released* version written in the plugin; the exact commit you run is the
   `rev` in `package.toml`.
@@ -534,7 +538,7 @@ The flow in words:
    over the placeholder. Using the `<id>:<folder>` form restores the file directly, without recreating its parent
    directories (whose possibly read-only permissions would otherwise prevent moving it). A file larger than 0 bytes is
    already cached and simply opened.
-5. **Restore.** Ask for a destination, validate it, group the selected entries by snapshot (dropping the ones below another selected entry), then run one `restic restore … --include <path> --include <path>…` per snapshot: restic opens the repository once instead of once per entry. The whole run is a Yazi **task** (`task.lua`): the status bar gauge and the task manager (`w`) show how far it is, and a failed restore leaves its entry in that list with restic's error in the log. While restic works the plugin reads its output with a 200 ms timeout so it can honour a cancellation: pressing the `restore` key again sets a flag (in the plugin state, shared by all its invocations) and the waiting call kills the process. That is the only way to stop it: Yazi 26.9 tells a plugin nothing when the user presses `x` on its task.
+5. **Restore.** Ask for a destination, validate it, group the selected entries by snapshot (dropping the ones below another selected entry), then run one `restic restore … --include <path> --include <path>…` per snapshot: restic opens the repository once instead of once per entry. The whole run is a Yazi **task** (`task.lua`): the status bar gauge and the task manager (`w`) show how far it is, and a failed restore leaves its entry in that list with restic's error in the log. While restic works the plugin reads its output with a 200 ms timeout so it can honour a cancellation: the `cancel` action (`b` `x`) sets a flag (in the plugin state, shared by all its invocations) and the waiting call kills the process. That is the only way to stop it: Yazi 26.9 tells a plugin nothing when the user presses `x` on its task. A second `restore` while one runs is refused.
 
 Design decisions worth knowing:
 
@@ -555,7 +559,7 @@ Design decisions worth knowing:
 restic.yazi/               the plugin (this is what gets installed)
   main.lua                   entry point only: wiring to Yazi (hooks, actions, previewer, spotter), no business logic
   config.lua                 .restic parser, restic binary resolution + minimum version, paths (~, relative, absolute)
-  client.lua                 restic CLI wrapper: environment, SFTP batch mode, JSON/JSONL parsing, error messages
+  client.lua                 restic CLI wrapper: environment, SFTP batch mode, JSON/JSONL parsing, error messages, killable runs
   snapshots.lua              snapshot folder naming, parsing and ordering
   ghost.lua                  ghost tree: create / reuse / lazily expand, path mapping (+ `latest`), staging, user dir
   restore.lua                restore planning (ghost paths → snapshot paths) and destination validation
@@ -586,7 +590,7 @@ unit-testable without Yazi.
 |---|---|---|
 | Unit (`spec/`) | parsing, naming, path mapping, error handling, argument building — with a Yazi mock | `busted` |
 | Integration (`tests/integration/`) | `client` and `ghost` against a real restic repository, and the ssh options against a fake `ssh` | `busted` |
-| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, `Tab` details, open, restore of folders and of multiple selections, reopen, `latest`, local-time folder names, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~4 min) |
+| End to end (`tests/e2e/`) | the whole plugin inside a real Yazi (browse, preview, `Tab` details, open, restore of folders and of multiple selections, the restore task and its cancellation, reopen, `latest`, local-time folder names, wrong password, SFTP through a local `sftp-server`) | `uv run --no-sync pytest tests/e2e` (~5 min) |
 | Tooling (`tests/tooling/`) | version bumping, changelog, packaging, `install.sh`, the release flow in a throw-away git repo | `uv run --no-sync pytest tests/tooling` |
 
 ---
