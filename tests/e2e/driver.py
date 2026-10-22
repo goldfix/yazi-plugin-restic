@@ -85,6 +85,10 @@ class YaziDriver:
             if time.monotonic() > end:
                 raise AssertionError(f"{needle!r} still on screen after {timeout}s:\n{self.text}")
 
+    def pump(self, seconds: float) -> None:
+        """Read the terminal for `seconds` without expecting anything (e.g. to let a cancelled process die)."""
+        self._pump(seconds)
+
     def wait_cwd(self, suffix: str, timeout: float = TIMEOUT) -> str:
         """Pump until the header line (current directory) ends with `suffix`."""
         end = time.monotonic() + timeout

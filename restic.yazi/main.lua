@@ -3,7 +3,7 @@
 --- This file only wires Yazi to the other modules; the logic lives in config/client/snapshots/ghost/restore/preview.
 ---
 --- Setup (`~/.config/yazi/init.lua`):  require("restic"):setup()
---- Commands (`keymap.toml`):           plugin restic -- enter | leave | back | restore | version
+--- Commands (`keymap.toml`):           plugin restic -- enter | leave | back | restore | cancel | version
 --- Previewer (`yazi.toml`):            { url = "/tmp/yazi-restic-*/**", run = "restic" }
 --- Spotter (`yazi.toml`, optional):     the same, plus `/tmp/yazi-restic-*/**/` (folders) and `*.restic`
 local Client = require(".client")
@@ -13,6 +13,7 @@ local info = require(".info")
 local preview = require(".preview")
 local restore = require(".restore")
 local snapshots = require(".snapshots")
+local Task = require(".task")
 local util = require(".util")
 local VERSION = require(".version").version
 
@@ -21,6 +22,11 @@ local M = {}
 --- Seconds the cursor must rest on a folder before it is listed for the preview pane, so that scrolling
 --- quickly through many folders does not fire one restic call each.
 local HOVER_DELAY = 0.4
+
+-- At most one restore runs at a time (like every other long operation here), and it can be stopped: `cancel` asks
+-- it to kill restic. `x` in the task manager cannot be used for that: Yazi 26.9 cancels the task entry but tells the
+-- plugin nothing, so the restic process would keep running unseen (verified on a real instance). The flags live in
+-- the plugin `state`, which every invocation shares (module-level values do not survive between two plugin calls).
 
 ---@class ResticSession  Lives in the plugin `state` (memory only, never persisted).
 ---@field root string  Ghost root directory.
@@ -95,6 +101,28 @@ local current_dir = ya.sync(function() return tostring(cx.active.current.cwd) en
 local hovered_path = ya.sync(function()
   local hovered = cx.active.current.hovered
   return hovered and tostring(hovered.url)
+end)
+
+--- Ask the restore in flight to stop (the `cancel` action).
+---@return boolean requested  `true` when a restore was running (and is now being stopped).
+local request_cancel = ya.sync(function(state)
+  if not state.restore_running then
+    return false
+  end
+  state.restore_cancel = true
+  return true
+end)
+
+--- Whether the user asked the running restore to stop (read while restic runs).
+local cancel_requested = ya.sync(function(state) return state.restore_cancel == true end)
+
+--- Whether a restore is running right now.
+local restore_running = ya.sync(function(state) return state.restore_running == true end)
+
+--- Mark a restore as running (`true`) or finished (`false`).
+---@param running boolean
+local set_restore_running = ya.sync(function(state, running)
+  state.restore_running, state.restore_cancel = running, false
 end)
 
 --- Selected files if any, otherwise the hovered one.
@@ -316,8 +344,14 @@ local function leave()
 end
 
 --- Restore the selection (or the hovered entry) to a folder chosen by the user, with one restic call per snapshot.
---- Shows the progress per snapshot and, on success, clears the selection.
+--- The whole operation is a Yazi task: a gauge in the status bar and an entry in the task manager (`w`) show how
+--- far it is, and a failed restore stays in that list with its reason. On success the selection is cleared.
+--- Only one restore runs at a time: the `cancel` action stops the one in flight (restic is killed).
 local function restore_selection()
+  if restore_running() then
+    return notify("A restore is already running: `b x` stops it", "warn")
+  end
+
   local session = get_session()
   if not session then
     return notify("No restic repository is open", "warn")
@@ -341,17 +375,50 @@ local function restore_selection()
   end
 
   local client = client_for(session)
-  local started = os.time()
-  for i, group in ipairs(groups) do -- one restic call per snapshot
-    notify(restore.progress(i, #groups, group))
-    local ok
-    ok, err = client:restore(group.short_id, group.paths, dest)
-    if not ok then
-      return notify(string.format("Snapshot %s: %s", group.short_id, err), "error") -- the selection is kept: retry
+  local total, started = restore.count(groups), os.time()
+  local task = Task.start(string.format("Restore %d item(s)", total), #groups)
+  set_restore_running(true)
+
+  -- the task must always end, or Yazi would list it as running for the rest of the session
+  local ok, failure = pcall(function()
+    for i, group in ipairs(groups) do -- one restic call per snapshot
+      local line = restore.progress(i, #groups, group)
+      notify(line)
+      task:log(line)
+
+      local restored, restore_err, stdout, cancelled =
+        client:restore(group.short_id, group.paths, dest, { cancelled = cancel_requested })
+      if cancelled then -- the user asked to stop: restic was killed, so nothing keeps running
+        task:cancel()
+        return notify("Restore cancelled", "warn")
+      elseif not restored then
+        local reason = string.format("Snapshot %s: %s", group.short_id, restore_err)
+        task:fail(reason)
+        return notify(reason, "error") -- the selection is kept: retry
+      end
+      task:log(restore.summary_line(stdout))
+      task:step()
     end
+
+    ya.emit("escape", { select = true })
+    local summary = restore.summary(total, dest, os.time() - started)
+    task:log(summary)
+    task:succeed()
+    notify(summary)
+  end)
+  set_restore_running(false)
+  if not ok then
+    task:fail(tostring(failure))
+    error(failure, 0)
   end
-  ya.emit("escape", { select = true })
-  notify(restore.summary(restore.count(groups), dest, os.time() - started))
+end
+
+--- Plugin command: stop the restore in flight. restic is killed, so nothing keeps working behind the user.
+local function cancel_restore()
+  if not request_cancel() then
+    return notify("No restore is running", "warn")
+  end
+  notify("Stopping the restore ...", "warn")
 end
 
 --- Register the hooks that lazily expand ghost folders. Call from `init.lua`.
@@ -380,7 +447,7 @@ function M:setup()
   end)
 end
 
---- Plugin command: `plugin restic -- enter|leave|back|restore|version`.
+--- Plugin command: `plugin restic -- enter|leave|back|restore|cancel|version`.
 ---@param job table
 function M:entry(job)
   local action = job.args[1]
@@ -388,6 +455,8 @@ function M:entry(job)
     guarded(enter)
   elseif action == "restore" then
     guarded(restore_selection)
+  elseif action == "cancel" then
+    guarded(cancel_restore)
   elseif action == "leave" then
     guarded(leave)
   elseif action == "back" then

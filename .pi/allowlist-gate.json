@@ -19,7 +19,12 @@
     "shell:sed *",
     "shell:sleep *",
     "shell:pgrep *",
-    "shell:cut *"
+    "shell:cut *",
+    "shell:which *",
+    "shell:strings *",
+    "shell:sort *",
+    "shell:uniq *",
+    "shell:export *"
   ],
   "deny": []
 }

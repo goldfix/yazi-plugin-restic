@@ -6,6 +6,20 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
+### Added
+- A running restore can be stopped: the new `cancel` action (`plugin restic -- cancel`, suggested binding `b` `x`)
+  kills the restic process (the selector is a flag in the plugin state, checked every 200 ms while restic works), so
+  nothing keeps running in the background. `x` in Yazi's task manager cannot do it: Yazi 26.9 cancels the entry
+  without telling the plugin (the plugin keeps tracking restic after an `x`, so `cancel` still works then). Starting a
+  restore while one runs is now refused instead of running two at once. Stopping is abrupt (SIGKILL): files already
+  restored stay, and restic's shared lock on the repository is left behind (`restic unlock`; stale after 30 minutes).
+- A restore is now a Yazi *task* instead of a series of notifications that fade: while it runs the status bar shows
+  a progress gauge and Yazi's task manager (`w`) lists it, with one log line per snapshot and restic's own summary
+  (files and bytes). A failed restore keeps its entry in the task manager with the reason in the log, so what went
+  wrong stays readable after the notification is gone.
+
 ## [0.7.2] - 2026-10-22
 
 No code change since 0.7.0: a documentation-only release (README and AGENTS fixes).

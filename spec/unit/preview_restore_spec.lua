@@ -137,6 +137,20 @@ describe("restore.progress / restore.summary", function()
   )
 end)
 
+describe("restore.summary_line", function()
+  it("returns restic's own recap, whatever the line endings and the blank lines around it", function()
+    local stdout = "restoring snapshot 8bbd3982 of [/data] to out\r\n\r\n"
+      .. "Summary: Restored 6 files/dirs (8.584 MiB) in 0:00\r\n\n"
+    assert.equals("Summary: Restored 6 files/dirs (8.584 MiB) in 0:00", restore.summary_line(stdout))
+  end)
+
+  it("has nothing to say about empty or missing output", function()
+    assert.is_nil(restore.summary_line(nil))
+    assert.is_nil(restore.summary_line(""))
+    assert.is_nil(restore.summary_line("\n\r\n"))
+  end)
+end)
+
 describe("restore.destination", function()
   local root = "/tmp/yazi-restic-1/abcd"
 

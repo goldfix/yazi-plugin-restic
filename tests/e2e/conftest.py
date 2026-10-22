@@ -25,6 +25,10 @@ on  = [ "b", "r" ]
 run = "plugin restic -- restore"
 
 [[mgr.prepend_keymap]]
+on  = [ "b", "x" ]
+run = "plugin restic -- cancel"
+
+[[mgr.prepend_keymap]]
 on  = "H"
 run = "plugin restic -- leave"
 

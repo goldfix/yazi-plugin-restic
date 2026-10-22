@@ -93,6 +93,21 @@ function M.summary(total, dest, seconds)
   return string.format("Restored %d item(s) to %s in %s", total, dest, util.duration(seconds))
 end
 
+--- Last non-empty line of the output of `restic restore`: restic's own recap ("Summary: Restored 6 files/dirs
+--- (8.6 MiB) in 0:00"). Kept in the task log, so the figures restic reported stay available afterwards.
+---@param stdout? string
+---@return string? line
+function M.summary_line(stdout)
+  local last
+  for line in (stdout or ""):gmatch("[^\r\n]+") do
+    local trimmed = util.trim(line)
+    if trimmed ~= "" then
+      last = trimmed
+    end
+  end
+  return last
+end
+
 --- Validate the destination typed by the user: `~` is expanded, the path must be absolute (a relative one
 --- would depend on Yazi's process directory) and must not lie inside the ghost tree.
 ---@param input string

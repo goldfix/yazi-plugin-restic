@@ -129,6 +129,105 @@ def test_restore_restores_every_selected_entry_not_the_hovered_one(in_data, tmp_
     assert "Restoring 2 item(s) from snapshot" in screen  # one restic call for the whole selection
 
 
+def test_a_long_restore_shows_up_in_the_task_manager(yazi, workspace, tmp_path):
+    """The restore is a Yazi task: while it runs the task manager (`w`) lists it and its log tells what is going on.
+
+    The repository is opened through a wrapper that sleeps before `restic restore`, so that the operation is slow
+    enough to be observed (a real restore of this repository takes a few milliseconds).
+    """
+    slow = tmp_path / "slow-restic"
+    slow.write_text('#!/bin/sh\nfor a in "$@"; do [ "$a" = restore ] && sleep 5; done\nexec restic "$@"\n')
+    slow.chmod(0o755)
+    (workspace / "demo.restic").write_text(f"repository = ./repo\nrestic_exec = {slow}\n")
+
+    yazi.send("j")  # demo.restic
+    yazi.send("\r")
+    yazi.wait_for("Repository password")
+    yazi.send(f"{PASSWORD}\r")
+    yazi.wait_for("latest")
+    yazi.wait_for("data")  # hover expansion lists the snapshot
+    yazi.send("l")
+    yazi.wait_cwd("[e2e]")
+    yazi.wait_for("docs")
+    yazi.send("l")
+    yazi.wait_cwd("/data")
+
+    target = tmp_path / "restored"
+    yazi.send("br")
+    yazi.wait_for("Restore to:")
+    yazi.send("\x15")
+    yazi.send(f"{target}\r")
+    yazi.wait_for("Restoring 1 item(s) from snapshot")  # the (transient) notification
+
+    yazi.send("w")  # task manager, while restic is still working
+    screen = yazi.wait_for("Restore 1 item(s)")  # the task itself, which the notification cannot keep alive
+    assert "0%" in screen  # its progress gauge, at the start
+    yazi.send("\x1b")  # back to the browser
+    yazi.wait_for("Restored 1 item(s) to")
+    assert (target / "data" / "docs" / "report.md").read_text() == "# report\n"
+
+
+def start_slow_restore(yazi, workspace, tmp_path):
+    """Open a repository whose restic pauses 5 s before restoring, and start restoring `data/`. Returns the target."""
+    slow = tmp_path / "slow-restic"
+    slow.write_text('#!/bin/sh\nfor a in "$@"; do [ "$a" = restore ] && sleep 5; done\nexec restic "$@"\n')
+    slow.chmod(0o755)
+    (workspace / "demo.restic").write_text(f"repository = ./repo\nrestic_exec = {slow}\n")
+
+    yazi.send("j")  # demo.restic
+    yazi.send("\r")
+    yazi.wait_for("Repository password")
+    yazi.send(f"{PASSWORD}\r")
+    yazi.wait_for("latest")
+    yazi.wait_for("data")
+    yazi.send("l")
+    yazi.wait_cwd("[e2e]")
+    yazi.wait_for("docs")
+    yazi.send("l")
+    yazi.wait_cwd("/data")
+
+    target = tmp_path / "restored"
+    yazi.send("br")
+    yazi.wait_for("Restore to:")
+    yazi.send("\x15")
+    yazi.send(f"{target}\r")
+    yazi.wait_for("Restoring 1 item(s) from snapshot")
+    return target
+
+
+def test_cancel_stops_the_restore_in_flight(yazi, workspace, tmp_path):
+    """`cancel` kills the running restic, so nothing keeps running behind the user."""
+    yazi.send("bx")  # nothing to cancel yet
+    yazi.wait_for("No restore is running")
+
+    target = start_slow_restore(yazi, workspace, tmp_path)
+    yazi.send("br")  # a second restore while one is running is refused
+    yazi.wait_for("A restore is already running")
+
+    yazi.send("bx")  # stop it: restic is killed
+    yazi.wait_for("Restore cancelled")
+    yazi.pump(7)  # longer than the pause of the wrapper: a restic left alive would have restored the files by now
+    assert not (target / "data" / "docs" / "report.md").exists()
+
+
+def test_cancel_still_works_after_x_removed_the_tasks(yazi, workspace, tmp_path):
+    """`x` in the task manager only drops the entries (Yazi tells the plugin nothing): restic goes on, the plugin
+    still knows about it, refuses a second restore and `cancel` stops it."""
+    target = start_slow_restore(yazi, workspace, tmp_path)
+    yazi.send("w")
+    yazi.wait_for("Tasks")
+    yazi.send("x")  # the plugin task, and then the restore task (the order of the list does not matter)
+    yazi.send("x")
+    yazi.send("\x1b")
+
+    yazi.send("br")
+    yazi.wait_for("A restore is already running")
+    yazi.send("bx")
+    yazi.wait_for("Restore cancelled")
+    yazi.pump(7)
+    assert not (target / "data" / "docs" / "report.md").exists()
+
+
 def test_reopening_a_repository_reuses_fetched_files(in_data):
     in_data.send("j")  # a.txt
     in_data.wait_for("Backup path: /data/a.txt")

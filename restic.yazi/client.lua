@@ -87,14 +87,81 @@ function Client:command(args)
   return command:env("RESTIC_PASSWORD", self.password)
 end
 
+--- Milliseconds between two checks of `opts.cancelled()` while restic runs.
+local POLL_MS = 200
+
+--- After a cancellation, how many empty polls to wait for the output pipes: restic itself dies at once, but a child
+--- of it (ssh for sftp) may still hold them open.
+local GRACE_POLLS = 5
+
+--- Run `command` to completion, or until the caller asks to stop: then restic is killed (nothing keeps running
+--- behind the user's back) and the call reports a cancellation.
+--- restic only draws its progress bar on a terminal, so waiting for output cannot be interrupted by a line: the
+--- lines are read with a short timeout and the check happens between them.
+---@param command table  From `Client:command`.
+---@param opts { cancelled: fun(): boolean }
+---@return table? output  `status`, `stdout`, `stderr` (like `Command:output()`).
+---@return string? err
+---@return boolean cancelled
+local function run_watched(command, opts)
+  local child, err = command:stdout(Command.PIPED):stderr(Command.PIPED):spawn()
+  if not child then
+    return nil, string.format("cannot start restic: %s", tostring(err))
+  end
+
+  local stdout, stderr, killed, idle = {}, {}, false, 0
+  while true do
+    if not killed and opts.cancelled() then
+      killed, idle = true, 0
+      pcall(function() return child:start_kill() end)
+    end
+
+    local line, event = child:read_line_with { timeout = POLL_MS }
+    if event == 2 then -- no data from either pipe: the process is gone
+      break
+    elseif line and line ~= "" then
+      local target = event == 1 and stderr or stdout -- 1 = stderr, 0 = stdout
+      target[#target + 1] = line
+      idle = 0
+    elseif killed then
+      idle = idle + 1
+      if idle > GRACE_POLLS then
+        break
+      end
+    end
+  end
+
+  local waited, status = pcall(function() return child:wait() end)
+  return {
+    status = (waited and status) or { success = false },
+    stdout = table.concat(stdout),
+    stderr = table.concat(stderr),
+  },
+    nil,
+    killed
+end
+
 --- Run restic to completion and return its stdout.
 ---@param args string[]
+---@param opts? { cancelled: fun(): boolean }  Ask restic to be stopped (see `run_watched`).
 ---@return string? stdout
 ---@return string? err
-function Client:run(args)
-  local output, err = self:command(args):output()
-  if not output then
-    return nil, string.format("cannot start restic: %s", tostring(err))
+---@return boolean cancelled
+function Client:run(args, opts)
+  local output, err, cancelled
+  if opts and opts.cancelled then
+    output, err, cancelled = run_watched(self:command(args), opts)
+  else
+    output, err = self:command(args):output()
+    if not output then
+      err = string.format("cannot start restic: %s", tostring(err))
+    end
+  end
+
+  if cancelled then
+    return nil, "cancelled", true
+  elseif not output then
+    return nil, err
   elseif not output.status.success then
     return nil, self:failure(output.status.code, output.stderr)
   end
@@ -202,9 +269,12 @@ end
 ---@param snapshot_id string  Snapshot id, optionally `<id>:<subfolder>` to take `subfolder` as the root.
 ---@param includes? string[]
 ---@param target string  Existing or creatable local directory.
+---@param opts? { cancelled: fun(): boolean }  Ask restic to be stopped (see `run_watched`).
 ---@return boolean? ok
 ---@return string? err
-function Client:restore(snapshot_id, includes, target)
+---@return string? stdout  restic's own output (its summary line is worth keeping).
+---@return boolean cancelled
+function Client:restore(snapshot_id, includes, target, opts)
   local args = { "restore", snapshot_id, "--target", target }
   includes = includes or {}
   if not util.contains(includes, "/") then
@@ -214,11 +284,13 @@ function Client:restore(snapshot_id, includes, target)
     end
   end
 
-  local stdout, err = self:run(args)
-  if not stdout then
+  local stdout, err, cancelled = self:run(args, opts)
+  if cancelled then
+    return nil, nil, nil, true
+  elseif not stdout then
     return nil, err
   end
-  return true
+  return true, nil, stdout
 end
 
 return Client
