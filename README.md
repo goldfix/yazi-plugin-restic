@@ -17,7 +17,8 @@ What you get:
   (host, paths, tags, how long the backup took, how many files changed…) and the statistics of the whole repository
   (number of snapshots, space used, compression).
 - **Open a file straight from the backup.** Press `Enter` and the file is fetched and opened with your usual program.
-- **Restore** one or many files and folders to any directory.
+- **Restore** one or many files and folders to any directory, with the progress of the running restore in the
+  status bar and in Yazi's task manager.
 - **No FUSE, nothing mounted**, no daemon, nothing to clean up by hand.
 - Works with restic's repository locations: local disks, SFTP, REST server and S3 (or S3-compatible) are tried;
   B2, Azure, Google Cloud, rclone… are handled by restic itself and should work the same, but are untried.
@@ -138,6 +139,7 @@ to `install.sh` in every build).
 | See more details | `Tab` on a file, folder or snapshot; `Tab` on a `.restic` file for the repository statistics |
 | Open a backed-up file | `Enter` on it (it is fetched, then opened) |
 | Restore | select entries (or highlight one), press `b` `r`, type the destination folder |
+| Stop a restore | `b` `x` (kills restic at once) |
 
 For all options and the full list of keys, read on: [Configuration](#configuration).
 
@@ -260,6 +262,11 @@ run  = "plugin restic -- restore"
 desc = "Restore the selected files/folders from the restic backup"
 
 [[mgr.prepend_keymap]]
+on   = [ "b", "x" ]
+run  = "plugin restic -- cancel"
+desc = "Stop the restore in progress"
+
+[[mgr.prepend_keymap]]
 on   = [ "b", "v" ]
 run  = "plugin restic -- version"
 desc = "Show the restic.yazi version"
@@ -268,7 +275,7 @@ desc = "Show the restic.yazi version"
 If you do not want to change `Enter`, `h` or `←`, bind `plugin restic -- enter` to another key, for example `on = "o"`; the rest
 works the same. Pick keys that are free in your own keymap: the `b` prefix ("backup") used here is
 unbound in Yazi's default keymap, which leaves `r` (rename) alone; if you already use `b` for something else, pick
-another free prefix (`e`, `u`, `B`, `R`…) for the restore/back/version keys.
+another free prefix (`e`, `u`, `B`, `R`…) for the restore/cancel/back/version keys.
 
 ### The `.restic` file
 
@@ -420,7 +427,13 @@ SFTP-over-local-`sftp-server` repositories.)
 | See backup details | highlight any entry: type, size, permissions, owner, modified/accessed/changed dates, original path, local copy yes/no. |
 | More details | `Tab` opens Yazi's "spot" table (by default `Tab` or `Esc` closes it, `j`/`k` scroll, `h`/`l` jump to the previous/next entry, `c` `c` copies the selected cell). On a **file or folder** of a snapshot it repeats the preview and, for a folder, adds what it directly contains (items and the size of its files). On a **snapshot** folder (or `latest`) it shows the snapshot: id, time, host, user, paths, tags, excludes, tree and parent ids, restic version and, when restic recorded it (0.17+), the backup run: duration, files and folders new/changed/unmodified, data processed and added. On the **session root** or on a **`.restic` file** it shows the repository: number of snapshots, first and last, hosts, the latest snapshot's size, and the storage statistics (stored size, size without compression, compression ratio, blobs). The snapshot part appears at once and the storage figures a moment later: restic reads the folder structure of every snapshot (not the file contents; each distinct folder once, usually from its local cache), which takes a few seconds on a large or remote repository. Closing the table stops it. On a `.restic` file the password of the repository you have open is reused; otherwise you are asked for it (and, as always, it is not kept). With entries selected, `Tab` in the browsing tree still describes the highlighted entry (Yazi's own multi-selection summary would add up the sizes of the empty placeholders). |
 | Open a file | `Enter`. Files appear as empty placeholders; the real content is fetched from the backup, then opened with whatever program Yazi's `open` rules choose. Later `Enter`s on the same file open the local copy at once. |
-| Restore | select entries with `Space` (or just highlight one), `b` `r`, confirm or edit the destination. Several entries from several snapshots can be restored at once; entries of the same snapshot go into a single `restic restore` call, a notification shows `Restoring 5 item(s) from snapshot e3e4a9ff` (with `(1/2)` when several snapshots are involved), and a final one the elapsed time. On success the selection is cleared; on failure it is kept, so you can retry. |
+| Restore | select entries with `Space` (or just highlight one), `b` `r`, confirm or edit the destination. Several entries from several snapshots can be restored at once; entries of the same snapshot go into a single `restic restore` call, a notification shows `Restoring 5 item(s) from snapshot e3e4a9ff` (with `(1/2)` when several snapshots are involved), and a final one the elapsed time. A restore is a Yazi *task*, so while it runs the status bar shows a progress
+gauge and `w` (Yazi's task manager) lists it; when it fails the task stays in that list with the reason in its log.
+To stop a running restore press `b` `x` (the `cancel` binding): restic is killed at once, so nothing keeps working in
+the background, and `Restore cancelled` confirms it. Files already written stay in the destination (a file being
+written may be incomplete) and the selection is kept, so you can retry. Starting a restore while another one runs is
+refused.
+On success the selection is cleared; on failure it is kept, so you can retry. |
 | Leave the backup | `h` or `←` as usual; at the top (the list of snapshots) one more press returns to the `.restic` file (needs the `leave` binding). `b` `b` jumps there from anywhere. |
 | Installed version | `b` `v` |
 | Reopen a repository | same as opening. Files you already fetched are still there; every folder is simply listed again once, so new snapshots appear. |
@@ -442,6 +455,9 @@ SFTP-over-local-`sftp-server` repositories.)
 | `h` / `←` at the top of a backup does not go back to the `.restic` file | The key is not bound to `plugin restic -- leave` (see [Configuring Yazi](#configuring-yazi)); `b` `b` (`back`) works from anywhere. |
 | `Error: Lua runtime failed … Failed to load plugin from …/restic.yazi/main.lua` when Yazi starts | `init.lua` calls `require("restic")` but the plugin is not in `~/.config/yazi/plugins/restic.yazi` (never installed, or the folder was deleted). Install it again, see [Installing](#installing). |
 | Nothing happens on `Enter` / `b r` | The keymap is missing, or the plugin is not in `plugins/restic.yazi`. Press `b` `v` to check. |
+| A restore takes longer than the notification | Press `w`: Yazi's task manager lists the running restore with its progress. When a restore fails, its entry stays there and `<Enter>` shows the reason (the log). |
+| A restore is going to take long and I want to stop it | Press `b` `x`: the restic process is killed and `Restore cancelled` confirms it. Do not use `x` in the task manager for this: it only removes the entry, and Yazi 26.9 tells plugins nothing about it, so restic would keep running unseen (if you did, `b` `x` still stops it, and a new restore is refused until it ends). |
+| After stopping a restore, `restic` complains about a lock, or `prune` waits | Stopping kills restic abruptly, so it cannot remove the (shared) lock it took on the repository. A local repository detects the dead process by itself; for a remote one the lock goes stale after 30 minutes, or run `restic unlock -r <repository>` yourself. It never blocks browsing or restoring. |
 
 ### Privacy and safety
 
@@ -490,7 +506,7 @@ and answer "what is this entry?".
                                       │
  Yazi ── cd / hover ──> lazy listing   `restic ls <snapshot> <dir> --json`  → create children, keep metadata in memory
  Yazi ── Enter on a file ──────────>   `restic restore <id>:<dir> --include /<name>` → into .staging, rename into place
- Yazi ── b r ──────────────────────>   `restic restore <id> --target <dest> --include <path>`
+ Yazi ── b r ──────────────────────>   `restic restore <id> --target <dest> --include <path>`   (b x kills it)
  Yazi ── hover ──> previewer           shows the metadata of the entry (from memory, not from the 0-byte file)
  Yazi ── Tab ────> spotter             entry / snapshot details from memory; repository: `restic snapshots` + `restic stats`
 ```
@@ -518,7 +534,7 @@ The flow in words:
    over the placeholder. Using the `<id>:<folder>` form restores the file directly, without recreating its parent
    directories (whose possibly read-only permissions would otherwise prevent moving it). A file larger than 0 bytes is
    already cached and simply opened.
-5. **Restore.** Ask for a destination, validate it, group the selected entries by snapshot (dropping the ones below another selected entry), then run one `restic restore … --include <path> --include <path>…` per snapshot: restic opens the repository once instead of once per entry.
+5. **Restore.** Ask for a destination, validate it, group the selected entries by snapshot (dropping the ones below another selected entry), then run one `restic restore … --include <path> --include <path>…` per snapshot: restic opens the repository once instead of once per entry. The whole run is a Yazi **task** (`task.lua`): the status bar gauge and the task manager (`w`) show how far it is, and a failed restore leaves its entry in that list with restic's error in the log. While restic works the plugin reads its output with a 200 ms timeout so it can honour a cancellation: pressing the `restore` key again sets a flag (in the plugin state, shared by all its invocations) and the waiting call kills the process. That is the only way to stop it: Yazi 26.9 tells a plugin nothing when the user presses `x` on its task.
 
 Design decisions worth knowing:
 
@@ -543,6 +559,7 @@ restic.yazi/               the plugin (this is what gets installed)
   snapshots.lua              snapshot folder naming, parsing and ordering
   ghost.lua                  ghost tree: create / reuse / lazily expand, path mapping (+ `latest`), staging, user dir
   restore.lua                restore planning (ghost paths → snapshot paths) and destination validation
+  task.lua                   the Yazi task that keeps a long restore visible (status bar gauge, task manager)
   preview.lua                the rows of the metadata preview (pure)
   info.lua                   the sections of the `Tab` spotter: entry, snapshot, repository (pure)
   util.lua                   small pure helpers

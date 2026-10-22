@@ -82,6 +82,35 @@ which may be called again with the same `job` to refresh (progressive results); 
 multi-line cell (Yazi also measures cell heights itself; the explicit height is harmless); `ya.input` works inside `spot`; when the user moves on Yazi aborts the Lua with the error
 "Spot task cancelled" (`guarded` swallows it); `Tab`/`Esc` close the spot, `h`/`l` swipe to the neighbours (re-run `spot`).
 
+Cancellation facts (probed on 26.9.1, they decide the design): `x` in the task manager calls `scheduler.cancel`,
+which cancels the task *and its scope*, but a running plugin invocation is NOT aborted and its `Command` child keeps
+running (`Task::cancel` in the nightly source also kills the scope only for `ya.async` bodies). So `x` can NEVER stop
+a restic process; pressing the action again is the only way, and it works because the plugin `state` is shared by all
+invocations (module-level locals are NOT: each `plugin` call gets a fresh async Lua runtime). `ya.async` cannot be
+called from an async context ("can only be used in sync context at the moment"), and `ya.select` does not exist in
+26.9.1 (`strings yazi`: no match; calling it returns nothing) although the nightly source and its `extract.lua` use it.
+`Child:read_line_with{ timeout = ms }` DOES exist in 26.9.1 (nil line, event 3 on timeout; event 2 = no data from
+either pipe) and is how the polling loop stays cancellable. Consequences kept on purpose: (a) `x` on BOTH task
+entries still leaves restic running until it ends (probed), but the flags in `state` keep tracking it, so `cancel`
+still works and `restore` is still refused; (b) `start_kill` is SIGKILL (the Lua `Child` has no pid, no SIGTERM), so
+restic cannot delete the shared lock `restore` takes (`restic list locks` showed one left after a kill -9): harmless,
+documented in the README (`restic unlock`); (c) files already restored stay in the destination, the selection
+is kept; (d) there is deliberately no heartbeat/timeout on `restore_running`: the plugin invocation is never aborted by Yazi
+(probed), so the flag always gets cleared; add one only if a case is found where it does not. After a kill the output pipes may stay open (a child of
+restic still holds them): stop waiting after a few empty polls instead of blocking until EOF.
+
+Task facts (verified by the e2e `long restore` test; the 26.9.1 Lua docs have NO task API): a plugin can create a
+task with `ya.task("custom", { pool = "plugin", scope = rt.scope(), track = true, progress = true }):name(title):spawn()`
+and then `task:progress{ total, succeeded, failed, workload, processed }` (deltas, Yazi sums them),
+`task:log(line)`, `task:succeed()`, `task:fail(reason)`. It shows as a gauge in the status bar and an entry in the
+task manager (`w`). Percent comes from `processed/workload` (`progress = true` is required), the entry's counter from
+`succeeded/total`. A **successful** task is removed from the manager when it ends, a **failed** one stays there
+(`yazi-scheduler/src/worker.rs`: failed tasks are skipped by `fulfill`) and its log becomes readable with
+`<Enter>`; `task:log` output of a *successful* task is not inspectable. `task:acquire()` (used by Yazi's own
+`extract.lua`) is NOT called here: it waits for a permit of the `plugin` pool, and we are already inside a plugin
+task (`plugin_workers` is 5 by default, but a small value would deadlock). A task must always be finished
+(`succeed`/`fail`/`cancel`) or it keeps counting as running at quit.
+
 Restic facts: `ls <snap> <dir> --json` (no `-R`) → JSONL: one `snapshot` record, then the dir itself, then its
 direct children (`name,type,path,size,mode,permissions,mtime,…`). Paths are as printed by `ls` (e.g. `/data/a.txt`).
 `snapshots --json` times keep the creating host's zone
@@ -146,8 +175,14 @@ Flow:
    `cx.active.selected` yields `File`s: `.url`) into one group per snapshot (duplicates, entries below another selected
    entry and non-backup paths such as the marker dropped; the skipped ones are counted and reported), then ONE
    `restore <snap> --target <dest> --include <p1> --include <p2>…` per snapshot (`Client:restore(id, includes, dest)`;
-   a `/` include = whole snapshot). Progress notification per group, summary with elapsed time; on success the
-   selection is cleared (`ya.emit("escape", { select = true })`), on failure it is kept.
+   a `/` include = whole snapshot). The whole run is a **Yazi task** (`task.lua`): `Restore N item(s)` in the
+   task manager (`w`) with one step per snapshot, the restic recap in its log, and a failure that stays visible in
+   that list (a successful task is removed by Yazi). While restic runs, the output is read with a 200 ms timeout and
+   a flag in the plugin `state` is checked between reads: the `cancel` action kills the process (`start_kill`) and
+   notifies `Restore cancelled`, while `restore` on top of a running one is refused ("A restore is already running:
+   `b x` stops it"). `x` in the task manager CANNOT do that (see the cancellation facts above).
+   Progress notification per group, summary with elapsed time; on success the selection is cleared
+   (`ya.emit("escape", { select = true })`), on failure it is kept.
 
 ## 5. Repository layout
 
@@ -159,6 +194,7 @@ restic.yazi/          the plugin (symlink/copy into ~/.config/yazi/plugins/)
   snapshots.lua       snapshot dir naming (local time) / parsing / ordering by real instant (`epoch`)
   ghost.lua           ghost tree create/reuse/expand, path mapping (+ `latest` alias), staging, per-user dir
   restore.lua         restore planning (ghost paths -> per-snapshot groups), progress texts, destination validation
+  task.lua            the Yazi task that keeps a long restore visible (status bar gauge + task manager)
   preview.lua         rows of the metadata preview (pure)
   info.lua            sections of the `Tab` spotter: entry / snapshot / repository (pure)
   util.lua            small pure helpers
@@ -226,6 +262,10 @@ run = "plugin restic -- back"        # jump to the .restic file of the open repo
 desc = "Back to the .restic file"
 
 [[mgr.prepend_keymap]]
+on  = [ "b", "x" ]
+run = "plugin restic -- cancel"      # kills the restic process of the restore in flight
+
+[[mgr.prepend_keymap]]
 on  = [ "b", "v" ]
 run = "plugin restic -- version"     # notifies the installed plugin version (dev builds: <version>-dev.<sha>[.dirty])
 desc = "Show the restic.yazi version"
@@ -258,6 +298,9 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
 | Spot a repository     | `Tab` on a `.restic` file / the ghost root   | snapshots, hosts, stored size, compression; password reused if that repo is open, else asked |
 | Fetch on demand       | `<Enter>` on a 0-byte file                   | file is restored locally, then opened                      |
 | Restore               | restore a complex folder                     | whole folder written to the chosen destination             |
+| Restore task          | `w` while a slow restore runs                | `Restore N item(s)` with a gauge (`0%`, `0/1`); after success Yazi drops it, after a failure it stays with the reason in the log (`<Enter>`) |
+| Cancel after `x`      | `w`, `x` on the task entries, then `b r` / `b x` | `b r` refused ("already running"), `b x` kills restic: restic outlives `x` but is never out of control |
+| Cancel a restore      | `b x` while a restore runs                   | restic killed at once, `Restore cancelled`, nothing restored; `b x` with nothing running says so; `b r` during a restore is refused; `x` in the task manager does NOT stop it |
 | Multi-restore         | select several entries with Space, `b r`     | all restored with one restic call per snapshot, selection cleared |
 | Local-time names      | run Yazi with another `TZ`                   | snapshot folder names show that zone's local time          |
 | Leave the backup      | `leave` at the top of the tree / `back` anywhere | back in the folder of the `.restic` file, file highlighted |
@@ -287,6 +330,10 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
 - **Scripted edits must assert**: when patching files from Python, `assert text.count(old) == 1` before `replace` (a
   silent no-op once left `ssh_batch_mode` out of the session and nothing failed until a dedicated e2e test existed).
   `stylua` reformats code, so patterns copied from an earlier version may not match anymore.
+- **Probe before designing**: a 10-line throwaway plugin plus `tests/e2e/driver.py` (see `tmp/probe`, deleted) settled
+  in minutes what neither the 26.9.1 docs nor the nightly source could: `x` cannot stop a plugin's child process,
+  `ya.async` is unavailable inside an async entry, `ya.select` is absent in 26.9.1. Do this before promising a feature
+  that depends on Yazi internals.
 - **Anything Yazi-facing needs an e2e test**: Lua unit tests passed while Yazi refused to start (module returning a
   string), while a `ya.sync` accessor dropped a field, and while selection restore read `cx.active.selected` wrongly
   (it yields `File` objects: use `.url`). Prove new tests can fail (revert the fix once).
