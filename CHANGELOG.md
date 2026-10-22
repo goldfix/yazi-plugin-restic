@@ -6,6 +6,12 @@ The `plugin-release` skill moves the `[Unreleased]` notes into a dated version s
 
 ## [Unreleased]
 
+### Changed
+- The suggested keys for the plugin actions moved from the `r` prefix to **`b`** ("backup"): `b r` restore, `b b` back,
+  `b v` version. `r` alone is Yazi's *rename*, which the old `r e` / `r b` / `r v` suggestion turned into a prefix
+  (`b` is unbound in Yazi's default keymap). Only the documented keymap changes, not the actions: an existing
+  `keymap.toml` keeps working, and you can switch by editing its `on = [ "r", … ]` lines.
+
 ## [0.6.0] - 2026-10-21
 
 ### Added

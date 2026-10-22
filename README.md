@@ -19,8 +19,8 @@ What you get:
 - **Open a file straight from the backup.** Press `Enter` and the file is fetched and opened with your usual program.
 - **Restore** one or many files and folders to any directory.
 - **No FUSE, nothing mounted**, no daemon, nothing to clean up by hand.
-- Works with every repository location restic supports: local disks, SFTP, REST server, S3, B2, Azure, Google
-  Cloud, rclone…
+- Works with restic's repository locations: local disks, SFTP, REST server and S3 (or S3-compatible) are tried;
+  B2, Azure, Google Cloud, rclone… are handled by restic itself and should work the same, but are untried.
 
 The password is asked once per session and lives only in memory.
 
@@ -93,11 +93,15 @@ on  = "h"
 run = "plugin restic -- leave"      # the same for the vim key (two entries: a list in `on` would be a key sequence)
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "e" ]
+on  = [ "b", "b" ]
+run = "plugin restic -- back"       # jump to the .restic file of the open repository, from anywhere
+
+[[mgr.prepend_keymap]]
+on  = [ "b", "r" ]
 run = "plugin restic -- restore"    # restore the selected (or hovered) entries
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "v" ]
+on  = [ "b", "v" ]
 run = "plugin restic -- version"    # show the installed version
 ```
 
@@ -133,7 +137,7 @@ to `install.sh` in every build).
 | See backup details | just highlight a file or folder |
 | See more details | `Tab` on a file, folder or snapshot; `Tab` on a `.restic` file for the repository statistics |
 | Open a backed-up file | `Enter` on it (it is fetched, then opened) |
-| Restore | select entries (or highlight one), press `r` `e`, type the destination folder |
+| Restore | select entries (or highlight one), press `b` `r`, type the destination folder |
 
 For all options and the full list of keys, read on: [Configuration](#configuration).
 
@@ -165,9 +169,9 @@ ya pkg delete goldfix/yazi-plugin-restic:restic
 Things worth knowing:
 
 - `ya pkg` follows the **default branch**, never tags or releases. To stay on a release, edit `package.toml` and put
-  an `=` before the reference — `rev = "=v0.1.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
+  an `=` before the reference — `rev = "=v0.7.0"` (a tag or commit) — then run `ya pkg install`; `upgrade` skips
   pinned packages.
-- The version shown by `r` `v` is the last *released* version written in the plugin; the exact commit you run is the
+- The version shown by `b` `v` is the last *released* version written in the plugin; the exact commit you run is the
   `rev` in `package.toml`.
 - Do not edit the installed files: `ya pkg` stores a hash and aborts on changes (`--discard` overrides it).
 
@@ -246,24 +250,25 @@ run  = "plugin restic -- leave"
 desc = "Leave (back to the .restic file from the top of a backup)"
 
 [[mgr.prepend_keymap]]
-on   = [ "r", "b" ]
+on   = [ "b", "b" ]
 run  = "plugin restic -- back"
 desc = "Back to the .restic file of the open repository"
 
 [[mgr.prepend_keymap]]
-on   = [ "r", "e" ]
+on   = [ "b", "r" ]
 run  = "plugin restic -- restore"
 desc = "Restore the selected files/folders from the restic backup"
 
 [[mgr.prepend_keymap]]
-on   = [ "r", "v" ]
+on   = [ "b", "v" ]
 run  = "plugin restic -- version"
 desc = "Show the restic.yazi version"
 ```
 
 If you do not want to change `Enter`, `h` or `←`, bind `plugin restic -- enter` to another key, for example `on = "o"`; the rest
-works the same. Pick keys that are free in your own keymap: by default `r` alone is Yazi's *rename*, so if you rely on
-it, use another prefix for the restore/version keys (for example `[ "R", "e" ]`).
+works the same. Pick keys that are free in your own keymap: the `b` prefix ("backup") used here is
+unbound in Yazi's default keymap, which leaves `r` (rename) alone; if you already use `b` for something else, pick
+another free prefix (`e`, `u`, `B`, `R`…) for the restore/back/version keys.
 
 ### The `.restic` file
 
@@ -392,8 +397,8 @@ REST, S3, B2, Azure, Google Cloud and rclone repositories get their credentials 
 restic reads from the environment Yazi was started with (for example `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` for
 S3, `B2_ACCOUNT_ID` and `B2_ACCOUNT_KEY` for B2, `RESTIC_REST_USERNAME`/`RESTIC_REST_PASSWORD` for a REST server).
 See [restic's documentation](https://restic.readthedocs.io/en/stable/030_preparing_a_new_repo.html) for the variables
-of each backend. Do not put secrets in the `.restic` file. (Amazon S3 and S3-compatible buckets have been tried by hand
-and work. REST, B2, Azure, Google Cloud and rclone have not been tried; the automated tests cover only local and
+of each backend. Do not put secrets in the `.restic` file. (Amazon S3, S3-compatible buckets and a REST server have been
+tried by hand and work. B2, Azure, Google Cloud and rclone have not been tried; the automated tests cover only local and
 SFTP-over-local-`sftp-server` repositories.)
 
 ### Where things go
@@ -401,7 +406,7 @@ SFTP-over-local-`sftp-server` repositories.)
 | What | Where |
 |---|---|
 | The browsing tree (placeholders and files you opened) | `/tmp/yazi-restic-<uid>/<repository id>/` (`%TEMP%\yazi-restic` on Windows). Private (mode `700`) and owned by you. The operating system clears `/tmp` eventually; there is no explicit cleanup. |
-| Restored files (`r` `e`) | The folder you type in the prompt; the suggestion is `~/restic-restore`. It must be an absolute path (`~` is fine) outside the browsing tree. The backed-up path is kept below it (restoring `/home/me/docs` into `~/out` gives `~/out/home/me/docs`) and existing files are overwritten. |
+| Restored files (`b` `r`) | The folder you type in the prompt; the suggestion is `~/restic-restore`. It must be an absolute path (`~` is fine) outside the browsing tree. The backed-up path is kept below it (restoring `/home/me/docs` into `~/out` gives `~/out/home/me/docs`) and existing files are overwritten. |
 | Your configuration | untouched; the plugin writes nothing there. |
 
 ---
@@ -415,9 +420,9 @@ SFTP-over-local-`sftp-server` repositories.)
 | See backup details | highlight any entry: type, size, permissions, owner, modified/accessed/changed dates, original path, local copy yes/no. |
 | More details | `Tab` opens Yazi's "spot" table (by default `Tab` or `Esc` closes it, `j`/`k` scroll, `h`/`l` jump to the previous/next entry, `c` `c` copies the selected cell). On a **file or folder** of a snapshot it repeats the preview and, for a folder, adds what it directly contains (items and the size of its files). On a **snapshot** folder (or `latest`) it shows the snapshot: id, time, host, user, paths, tags, excludes, tree and parent ids, restic version and, when restic recorded it (0.17+), the backup run: duration, files and folders new/changed/unmodified, data processed and added. On the **session root** or on a **`.restic` file** it shows the repository: number of snapshots, first and last, hosts, the latest snapshot's size, and the storage statistics (stored size, size without compression, compression ratio, blobs). The snapshot part appears at once and the storage figures a moment later: restic reads the folder structure of every snapshot (not the file contents; each distinct folder once, usually from its local cache), which takes a few seconds on a large or remote repository. Closing the table stops it. On a `.restic` file the password of the repository you have open is reused; otherwise you are asked for it (and, as always, it is not kept). With entries selected, `Tab` in the browsing tree still describes the highlighted entry (Yazi's own multi-selection summary would add up the sizes of the empty placeholders). |
 | Open a file | `Enter`. Files appear as empty placeholders; the real content is fetched from the backup, then opened with whatever program Yazi's `open` rules choose. Later `Enter`s on the same file open the local copy at once. |
-| Restore | select entries with `Space` (or just highlight one), `r` `e`, confirm or edit the destination. Several entries from several snapshots can be restored at once; entries of the same snapshot go into a single `restic restore` call, a notification shows `Restoring 5 item(s) from snapshot e3e4a9ff` (with `(1/2)` when several snapshots are involved), and a final one the elapsed time. On success the selection is cleared; on failure it is kept, so you can retry. |
-| Leave the backup | `h` or `←` as usual; at the top (the list of snapshots) one more press returns to the `.restic` file (needs the `leave` binding). `r` `b` jumps there from anywhere. |
-| Installed version | `r` `v` |
+| Restore | select entries with `Space` (or just highlight one), `b` `r`, confirm or edit the destination. Several entries from several snapshots can be restored at once; entries of the same snapshot go into a single `restic restore` call, a notification shows `Restoring 5 item(s) from snapshot e3e4a9ff` (with `(1/2)` when several snapshots are involved), and a final one the elapsed time. On success the selection is cleared; on failure it is kept, so you can retry. |
+| Leave the backup | `h` or `←` as usual; at the top (the list of snapshots) one more press returns to the `.restic` file (needs the `leave` binding). `b` `b` jumps there from anywhere. |
+| Installed version | `b` `v` |
 | Reopen a repository | same as opening. Files you already fetched are still there; every folder is simply listed again once, so new snapshots appear. |
 
 ### Troubleshooting
@@ -434,9 +439,9 @@ SFTP-over-local-`sftp-server` repositories.)
 | `N selected item(s) are not in the backup and will be skipped` | The selection (Yazi keeps it across folders) also holds files outside the snapshots; the rest is restored. |
 | `… is already being restored` | The same file is being fetched; wait for it. |
 | A file called `(not listed yet)` | The folder is being read from the backup; it disappears when the listing is done. If it stays, the listing failed (an error was shown): leave the folder and enter it again to retry. |
-| `h` / `←` at the top of a backup does not go back to the `.restic` file | The key is not bound to `plugin restic -- leave` (see [Configuring Yazi](#configuring-yazi)); `r` `b` (`back`) works from anywhere. |
+| `h` / `←` at the top of a backup does not go back to the `.restic` file | The key is not bound to `plugin restic -- leave` (see [Configuring Yazi](#configuring-yazi)); `b` `b` (`back`) works from anywhere. |
 | `Error: Lua runtime failed … Failed to load plugin from …/restic.yazi/main.lua` when Yazi starts | `init.lua` calls `require("restic")` but the plugin is not in `~/.config/yazi/plugins/restic.yazi` (never installed, or the folder was deleted). Install it again, see [Installing](#installing). |
-| Nothing happens on `Enter` / `r e` | The keymap is missing, or the plugin is not in `plugins/restic.yazi`. Press `r` `v` to check. |
+| Nothing happens on `Enter` / `b r` | The keymap is missing, or the plugin is not in `plugins/restic.yazi`. Press `b` `v` to check. |
 
 ### Privacy and safety
 
@@ -485,7 +490,7 @@ and answer "what is this entry?".
                                       │
  Yazi ── cd / hover ──> lazy listing   `restic ls <snapshot> <dir> --json`  → create children, keep metadata in memory
  Yazi ── Enter on a file ──────────>   `restic restore <id>:<dir> --include /<name>` → into .staging, rename into place
- Yazi ── r e ──────────────────────>   `restic restore <id> --target <dest> --include <path>`
+ Yazi ── b r ──────────────────────>   `restic restore <id> --target <dest> --include <path>`
  Yazi ── hover ──> previewer           shows the metadata of the entry (from memory, not from the 0-byte file)
  Yazi ── Tab ────> spotter             entry / snapshot details from memory; repository: `restic snapshots` + `restic stats`
 ```
@@ -576,7 +581,7 @@ inside the plugin folder, so `restic.yazi/README.md` and `restic.yazi/LICENSE` a
 `../README.md` and `../LICENSE`: `ya pkg add` replaces them with copies of their targets, and the build does the same
 for the package. Links in the README must therefore be absolute URLs. The build checks the symlinks (and
 `tests/tooling/test_ya_pkg.py` runs the real `ya pkg add` against a local stand-in for GitHub; installing from GitHub with
-`ya pkg add`, `r` `v` and removing it again were also tried by hand and work).
+`ya pkg add`, `b` `v` and removing it again were also tried by hand and work).
 
 ```sh
 source lua_env.sh init          # one-off: builds a local Lua 5.5 toolchain (busted, luacheck, stylua) in ./.lua
@@ -604,7 +609,7 @@ dist/
 ```
 
 The version lives only in `restic.yazi/version.lua` (the last *released* version). A build from anything but a clean
-checkout of a release tag is labelled `<version>-dev.<sha>[.dirty]`, and `r` `v` in Yazi shows which one is running.
+checkout of a release tag is labelled `<version>-dev.<sha>[.dirty]`, and `b` `v` in Yazi shows which one is running.
 For development you can link the folder instead of installing:
 `ln -s "$PWD/restic.yazi" ~/.config/yazi/plugins/restic.yazi`.
 
@@ -624,8 +629,8 @@ Known gaps of the current version. The roadmap lives in the project notes, not h
       (a full-id map would fix it)
 - [ ] Two Yazi instances of the same user opening the same repository share one browsing tree; the second open clears
       the first one's in-flight downloads
-- [ ] Backends other than local and SFTP are not covered by automated tests (S3 and S3-compatible were tried by hand
-      and work; REST, B2, Azure, Google Cloud and rclone are untried)
+- [ ] Backends other than local and SFTP are not covered by automated tests (S3, S3-compatible and REST were tried by
+      hand and work; B2, Azure, Google Cloud and rclone are untried)
 
 ---
 
