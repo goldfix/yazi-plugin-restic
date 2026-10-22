@@ -102,7 +102,7 @@ def test_enter_fetches_a_placeholder_then_opens_it(in_data):
 def test_restore_directory(in_data, tmp_path):
     in_data.wait_for("blob.bin")  # cursor is on docs/: its content shows in the preview
     target = tmp_path / "restored"
-    in_data.send("re")
+    in_data.send("br")
     in_data.wait_for("Restore to:")
     in_data.send("\x15")  # Ctrl-U: clear the suggested destination
     in_data.send(f"{target}\r")
@@ -116,7 +116,7 @@ def test_restore_restores_every_selected_entry_not_the_hovered_one(in_data, tmp_
     in_data.send(" ")  # Space selects docs/ and moves the cursor down to a.txt...
     in_data.send(" ")  # ...which is selected too; the cursor stays on the last entry
     target = tmp_path / "restored"
-    in_data.send("re")
+    in_data.send("br")
     in_data.wait_for("Restore to:")
     in_data.send("\x15")
     in_data.send(f"{target}\r")
@@ -213,13 +213,13 @@ def test_a_folder_still_being_read_shows_a_marker_instead_of_no_items(slow_listi
 
 
 def test_back_returns_to_the_restic_file_from_anywhere_in_the_tree(in_data):
-    in_data.send("rb")
+    in_data.send("bb")
     in_data.wait_cwd("/work")
     in_data.wait_for("repository = ./repo")  # demo.restic is highlighted: its text is previewed
 
 
 def test_back_without_an_open_repository_says_so(yazi):
-    yazi.send("rb")
+    yazi.send("bb")
     yazi.wait_for("No restic repository is open")
 
 
@@ -237,7 +237,7 @@ def test_leave_elsewhere_goes_up_one_level_as_usual(in_data):
 
 def test_version_action_reports_the_installed_version(yazi):
     version = re.search(r'version = "([^"]+)"', (PLUGIN_DIR / "version.lua").read_text()).group(1)
-    yazi.send("rv")
+    yazi.send("bv")
     yazi.wait_for(f"restic.yazi {version}")
 
 

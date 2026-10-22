@@ -21,7 +21,7 @@ on  = "<Enter>"
 run = "plugin restic -- enter"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "e" ]
+on  = [ "b", "r" ]
 run = "plugin restic -- restore"
 
 [[mgr.prepend_keymap]]
@@ -29,11 +29,11 @@ on  = "H"
 run = "plugin restic -- leave"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "b" ]
+on  = [ "b", "b" ]
 run = "plugin restic -- back"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "v" ]
+on  = [ "b", "v" ]
 run = "plugin restic -- version"
 """
 

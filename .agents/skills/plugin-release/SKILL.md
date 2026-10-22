@@ -39,7 +39,7 @@ lives in a different folder.
   (`return { version = "X.Y.Z" }`) and it always holds the **last released** version (`0.0.0` = nothing released yet).
 - `build` labels its output from git: a clean checkout of the tag `v<version>` is `<version>`; anything else is
   `<version>-dev.<short sha>` plus `.dirty` when there are uncommitted changes. The label is stamped into the
-  *package's* `version.lua` (the source file is untouched), so `plugin restic -- version` (key `r` `v`) tells the tester
+  *package's* `version.lua` (the source file is untouched), so `plugin restic -- version` (key `b` `v`) tells the tester
   exactly what Yazi runs.
 - Release notes live in `CHANGELOG.md` (Keep a Changelog). Contributors add bullets under `## [Unreleased]` as they
   work; a release moves them into `## [X.Y.Z] - date`. A release with an empty `[Unreleased]` is refused.
@@ -65,7 +65,7 @@ Lua tools are taken from `./.lua/bin` (create it with `source lua_env.sh init` i
 3. Install it: `dist/latest/install.sh` (uses `$YAZI_CONFIG_HOME`, else `~/.config/yazi`; replaces a previous install;
    refuses to overwrite a symlinked development checkout). The user's `init.lua`, `yazi.toml` and `keymap.toml` are
    never modified: the settings to add are in `README.md`; `install.sh` also prints where `sample_backup.restic` is.
-4. Confirm in Yazi with `r` `v` (the dev label must match the build that was printed).
+4. Confirm in Yazi with `b` `v` (the dev label must match the build that was printed).
 
 To smoke-test the *installed* package against a real Yazi: `E2E_PLUGIN_DIR=<dir>/plugins/restic.yazi uv run --no-sync pytest tests/e2e`.
 

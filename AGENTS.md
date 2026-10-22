@@ -206,7 +206,7 @@ run = "plugin restic -- enter"       # smart enter: ghost file → fetch+open; .
 desc = "Open (restic aware)"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "e" ]
+on  = [ "b", "r" ]
 run = "plugin restic -- restore"
 desc = "Restore selected file/folder from the restic backup"
 
@@ -221,12 +221,12 @@ run = "plugin restic -- leave"
 desc = "Leave (restic aware)"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "b" ]
+on  = [ "b", "b" ]
 run = "plugin restic -- back"        # jump to the .restic file of the open repository
 desc = "Back to the .restic file"
 
 [[mgr.prepend_keymap]]
-on  = [ "r", "v" ]
+on  = [ "b", "v" ]
 run = "plugin restic -- version"     # notifies the installed plugin version (dev builds: <version>-dev.<sha>[.dirty])
 desc = "Show the restic.yazi version"
 ```
@@ -258,7 +258,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
 | Spot a repository     | `Tab` on a `.restic` file / the ghost root   | snapshots, hosts, stored size, compression; password reused if that repo is open, else asked |
 | Fetch on demand       | `<Enter>` on a 0-byte file                   | file is restored locally, then opened                      |
 | Restore               | restore a complex folder                     | whole folder written to the chosen destination             |
-| Multi-restore         | select several entries with Space, `r e`     | all restored with one restic call per snapshot, selection cleared |
+| Multi-restore         | select several entries with Space, `b r`     | all restored with one restic call per snapshot, selection cleared |
 | Local-time names      | run Yazi with another `TZ`                   | snapshot folder names show that zone's local time          |
 | Leave the backup      | `leave` at the top of the tree / `back` anywhere | back in the folder of the `.restic` file, file highlighted |
 | Installed version     | `plugin restic -- version`                   | notification with the build label (`0.1.0` or `0.1.0-dev.…`) |
@@ -269,8 +269,8 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
 
 ## 9. Working rules (learned the hard way)
 
-- **Backends tested**: local and sftp (automated: sftp through a fake `ssh` that execs the local `sftp-server`); S3 and
-  S3-compatible buckets by hand (user, OK). Untried: REST, B2, Azure, Google Cloud, rclone, real sftp server, Linux,
+- **Backends tested**: local and sftp (automated: sftp through a fake `ssh` that execs the local `sftp-server`); S3,
+  S3-compatible buckets and a REST server by hand (user, OK). Untried: B2, Azure, Google Cloud, rclone, real sftp server, Linux,
   Windows. Say so in docs; do not claim more.
 - **Delivery** (verified, details in MEMORY.md "Yazi delivery system"): two routes. `ya pkg add
   goldfix/yazi-plugin-restic:restic` (GitHub-only, default branch, needs the repo public; works thanks to the
@@ -278,6 +278,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   in `package.toml`, so `ya pkg list` never shows it; warns if `ya pkg` already manages the plugin). Never mix them on
   one machine: `ya pkg` hash-checks the deployed folder.
 
+- **Release state**: last release `v0.6.0`; `v0.7.0` (minor: `b` key prefix, docs) is being prepared, see MEMORY.md "Next steps".
 - **Ask before** committing, tagging/releasing (`release.py release`) or pushing; never push. Releases need the user's
   go-ahead on the bump level. `MEMORY.md` is git-ignored by the inherited `.gitignore`: ask before changing that.
 - **Scripted edits must assert**: when patching files from Python, `assert text.count(old) == 1` before `replace` (a
