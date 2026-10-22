@@ -321,7 +321,7 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   in `package.toml`, so `ya pkg list` never shows it; warns if `ya pkg` already manages the plugin). Never mix them on
   one machine: `ya pkg` hash-checks the deployed folder.
 
-- **Release state**: last release `v0.8.0` (`b2476b0`: restore as a Yazi task + `cancel`/`b x`; 0.7.1/0.7.2 were docs-only). Next work: MEMORY.md "Next steps".
+- **Release state**: last release `v0.8.0` (`b2476b0`: restore as a Yazi task + `cancel`/`b x`; HEAD `ba9cc89` = README fixes, docs-only; 0.7.1/0.7.2 were docs-only). Next work: MEMORY.md "Next steps".
 - **Docs-only changes need no release**: `ya pkg` follows the default branch, so a README fix reaches users once merged;
   a release only changes the label shown by `b v`. `release.py` refuses an empty `[Unreleased]`, and re-adding bullets by
   hand to force it (as done for 0.7.1/0.7.2) leaves the CHANGELOG without those versions: write real notes instead.
