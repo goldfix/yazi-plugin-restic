@@ -1,9 +1,11 @@
 # AGENTS.md — Instructions for AI agents
 
 Read `MEMORY.md` first (living diary: status, decisions, next steps). Keep **this file** for directives and
-vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README: overview, TL;DR, configuration, internals, build notes, known gaps) is end-user
-documentation: keep it in sync with user-visible changes (the build copies it, like `LICENSE`, into the package's plugin
-folder, so its links must be absolute URLs). User-visible changes also go under `## [Unreleased]` in `CHANGELOG.md`;
+vital facts; keep **MEMORY.md** as the work diary. `README.md` (root: the ONLY README, kept SHORT on purpose: intro, TL;DR, configuration, `.restic` file, troubleshooting)
+is end-user documentation: keep it in sync with user-visible changes (the build copies it, like `LICENSE`, into the
+package's plugin folder, so its links must be absolute URLs). Everything else lives in `docs/` (not shipped, relative
+links allowed): `HOW_IT_WORKS.md` (ghost filesystem, flow, design decisions, privacy) and `DEVELOPMENT.md` (build,
+project structure, tests, releases, known limitations/open points). Do not grow the README again: add detail there. User-visible changes also go under `## [Unreleased]` in `CHANGELOG.md`;
 `sample_backup.restic` must follow any change to the `.restic` format.
 Everything (files, comments, commit messages) is written in **English**.
 
@@ -210,6 +212,7 @@ tests/tooling/        pytest for the release script (+ install.sh, release flow 
 tests/e2e/            pytest + pyte: a real Yazi in a pty, isolated YAZI_CONFIG_HOME, real restic repo
 .agents/skills/plugin-release/   build / version / release skill (scripts/release.py, assets/install.sh)
 dist/                 builds ready to install (gitignored): restic.yazi-<version>/, .tar.gz, .sha256, `latest` link
+docs/                 HOW_IT_WORKS.md + DEVELOPMENT.md (moved out of the README on 2026-10-22; no usage section any more)
 sample_backup.restic  annotated `.restic` template for users (shipped next to install.sh; every example is tested by `spec/unit/sample_spec.lua`: keep it in sync with `config.lua`)
 CHANGELOG.md          Keep a Changelog; `[Unreleased]` is moved to a version section by `release`
 source_app/yazi/      upstream yazi sources, REFERENCE ONLY (gitignored, never edit)
