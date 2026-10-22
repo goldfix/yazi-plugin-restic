@@ -278,7 +278,10 @@ prepend_spotters = [        # Tab; optional. A trailing `/` in `url` means "dire
   in `package.toml`, so `ya pkg list` never shows it; warns if `ya pkg` already manages the plugin). Never mix them on
   one machine: `ya pkg` hash-checks the deployed folder.
 
-- **Release state**: last release `v0.7.0` (`b` key prefix, REST verified); next work: MEMORY.md "Next steps".
+- **Release state**: last release `v0.7.2` (code identical to 0.7.0; 0.7.1/0.7.2 were docs-only). Next work: MEMORY.md "Next steps".
+- **Docs-only changes need no release**: `ya pkg` follows the default branch, so a README fix reaches users once merged;
+  a release only changes the label shown by `b v`. `release.py` refuses an empty `[Unreleased]`, and re-adding bullets by
+  hand to force it (as done for 0.7.1/0.7.2) leaves the CHANGELOG without those versions: write real notes instead.
 - **Ask before** committing, tagging/releasing (`release.py release`) or pushing; never push. Releases need the user's
   go-ahead on the bump level. `MEMORY.md` is git-ignored by the inherited `.gitignore`: ask before changing that.
 - **Scripted edits must assert**: when patching files from Python, `assert text.count(old) == 1` before `replace` (a
